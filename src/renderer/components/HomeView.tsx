@@ -50,10 +50,10 @@ export function HomeView({ state, projectId, onPickProject, onStarted, onNewProj
           key={project.id}
           autoFocus
           placeholder={`New session in ${project.name}…`}
-          onSend={async text => {
+          onSend={async (text, images) => {
             setError('')
             try {
-              onStarted(await cam().createSession(project.id, text))
+              onStarted(await cam().createSession(project.id, text, images))
             } catch (err) {
               setError(errorText(err))
             }

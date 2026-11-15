@@ -4,6 +4,7 @@ import type {
   AppState,
   ChatItem,
   ChatUpdate,
+  ImageAttachment,
   KnownFolder,
   NewProjectInput,
   PendingResponse,
@@ -30,8 +31,8 @@ export interface CamApi {
   knownFolders(): Promise<KnownFolder[]>
   folderInfo(path: string): Promise<FolderInfo>
 
-  createSession(projectId: string, prompt?: string): Promise<string>
-  send(sessionId: string, text: string): Promise<void>
+  createSession(projectId: string, prompt?: string, images?: ImageAttachment[]): Promise<string>
+  send(sessionId: string, text: string, images?: ImageAttachment[]): Promise<void>
   interrupt(sessionId: string): Promise<void>
   respond(sessionId: string, requestId: string, response: PendingResponse): Promise<void>
   archive(sessionId: string): Promise<void>

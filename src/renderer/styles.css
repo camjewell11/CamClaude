@@ -281,6 +281,21 @@ code {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Unarchived sessions in a collapsed project. */
+.project-count {
+  flex: none;
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--hover);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
 
 .project-tools {
   display: flex;
@@ -619,6 +634,9 @@ code {
 .messages {
   flex: 1;
   overflow-y: auto;
+  /* Only vertical scrolling. Code blocks and tables scroll sideways inside themselves; a long
+     path or URL wraps instead of widening the whole list (on a phone you could pan it sideways). */
+  overflow-x: hidden;
   padding: 28px 0 12px;
   min-height: 0;
 }
@@ -649,10 +667,12 @@ code {
 }
 
 .msg-assistant {
+  min-width: 0;
   font-family: var(--font-reply);
   font-size: 16px;
   line-height: 1.65;
   color: var(--text);
+  overflow-wrap: anywhere; /* long inline paths and URLs; pre blocks don't wrap, they scroll */
 }
 
 .prose > :first-child {
@@ -710,6 +730,7 @@ code {
   margin: 0 0 0.75em;
   display: block;
   overflow-x: auto;
+  overflow-wrap: normal; /* tables scroll sideways rather than squeezing words apart */
 }
 .prose th,
 .prose td {
@@ -999,6 +1020,99 @@ code {
 .round-button.stop:hover {
   background: var(--hover);
 }
+.round-button.attach {
+  color: var(--text-2);
+}
+.round-button.attach:not(:disabled):hover {
+  background: var(--hover);
+}
+.composer.dragging {
+  border-color: var(--accent);
+}
+
+/* Photos attached in the composer, before sending. */
+.composer-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.thumb {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--hover);
+}
+.thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.thumb.loading {
+  animation: thumb-pulse 1s ease-in-out infinite alternate;
+}
+@keyframes thumb-pulse {
+  to {
+    opacity: 0.45;
+  }
+}
+.thumb-remove {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgb(0 0 0 / 62%);
+  color: #fff;
+  font-size: 15px;
+  line-height: 1;
+}
+
+/* Photos in a sent message. */
+.msg-images {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.msg-images:not(:last-child) {
+  margin-bottom: 8px;
+}
+.msg-image {
+  display: block;
+  padding: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  cursor: zoom-in;
+}
+.msg-image img {
+  display: block;
+  max-width: min(240px, 100%);
+  max-height: 240px;
+  object-fit: cover;
+}
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  background: rgb(0 0 0 / 88%);
+  cursor: zoom-out;
+}
+.lightbox img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 6px;
+}
 
 .project-select {
   border: 1px solid var(--border);
@@ -1210,6 +1324,10 @@ textarea.text-input {
   color: var(--faint);
   margin: 0;
 }
+/* A long folder path wraps instead of widening the page on a phone. */
+.home-hint code {
+  overflow-wrap: anywhere;
+}
 
 /* menus and modals */
 .menu {
@@ -1245,11 +1363,14 @@ textarea.text-input {
   z-index: 40;
   background: rgb(0 0 0 / 35%);
   display: grid;
+  /* minmax(0, ...): a long unbroken line (a folder path) can't widen the dialog past the screen. */
+  grid-template-columns: minmax(0, 1fr);
   place-items: center;
   padding: 24px;
 }
 .modal {
   width: min(520px, 100%);
+  min-width: 0;
   max-height: calc(100vh - 48px);
   display: flex;
   flex-direction: column;
@@ -1277,7 +1398,9 @@ textarea.text-input {
 }
 .modal-body {
   padding: 10px 22px 16px;
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -1527,6 +1650,11 @@ html.remote .home-drag {
 html.remote .messages {
   overscroll-behavior: contain;
 }
+/* A long press opens CamClaude's own menu, not the phone's link preview. */
+html.remote .session-row,
+html.remote .project-head {
+  -webkit-touch-callout: none;
+}
 
 @media (max-width: 760px) {
   :root {
@@ -1589,12 +1717,33 @@ html.remote .messages {
   .drawer-open .sidebar {
     transform: none;
   }
-  .drawer-open .scrim {
-    display: block;
+  .scrim {
     position: fixed;
     inset: 0;
     z-index: 25;
     background: rgb(0 0 0 / 40%);
+  }
+  /* While a swipe moves the drawer, touch.ts sets the scrim's opacity to follow it. */
+  .drawer-open .scrim,
+  .drawer-dragging .scrim {
+    display: block;
+  }
+  .menu button {
+    min-height: 44px;
+    font-size: 15px;
+  }
+  .round-button {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+  }
+  .thumb {
+    width: 72px;
+    height: 72px;
+  }
+  .thumb-remove {
+    width: 26px;
+    height: 26px;
   }
   .session-row {
     min-height: 44px;
@@ -1655,7 +1804,7 @@ html.remote .messages {
   .modal,
   .modal.wide {
     width: 100%;
-    max-height: 92dvh;
+    max-height: calc(100dvh - env(safe-area-inset-top) - 12px);
     border-radius: 16px 16px 0 0;
     padding-bottom: env(safe-area-inset-bottom);
   }

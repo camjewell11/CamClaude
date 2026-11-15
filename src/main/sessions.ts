@@ -26,6 +26,7 @@ import type {
   AskQuestion,
   ChatItem,
   ChatUpdate,
+  ImageAttachment,
   KnownFolder,
   PendingRequest,
   PendingResponse,
@@ -35,7 +36,7 @@ import type {
   SessionStatus,
   SessionView,
 } from '../shared/types.ts'
-import { ChatLog, toolSummary } from './chatlog.ts'
+import { ChatLog, toolSummary, userContent } from './chatlog.ts'
 import { claudeBinary } from './claudeBinary.ts'
 import { loadEnvFiles } from './envfiles.ts'
 import {
@@ -44,11 +45,14 @@ import {
   HARD_STOP_MESSAGE,
   LoopTracker,
   handoffRequest,
+  pickHandoff,
   isOverLimit,
+  isQuotaGuardStop,
   kTokens,
   requestSize,
   successorPrompt,
   successorTitle,
+  toolResultTexts,
 } from './guard.ts'
 import type { Store } from './store.ts'
 
@@ -96,7 +100,17 @@ interface Live {
   /** Prompts sent whose turn has not finished yet. */
   turnsQueued: number
   lastAssistantText: string
+  /** The SDK's own view of the session, from session_state_changed. */
+  sdkState?: 'idle' | 'running' | 'requires_action'
+  /** When this app last pushed a prompt, so a stale 'idle' doesn't settle it. */
+  lastPushAt: number
+  idleTimer?: ReturnType<typeof setTimeout>
+  /** Handoff requests sent since the last completed handoff. */
+  handoffAttempts: number
 }
+
+/** How long 'idle' must hold before prompts without a result count as finished. */
+const IDLE_SETTLE_MS = 1500
 
 export interface Attention {
   sessionId: string
@@ -233,14 +247,16 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
     projectId: string,
     prompt?: string,
     extra: Partial<Pick<SessionRecord, 'title' | 'predecessorId' | 'generation' | 'draft'>> = {},
+    images: readonly ImageAttachment[] = [],
   ): SessionRecord {
+    userContent(prompt ?? '', images) // reject a bad image before the session exists
     const project = this.store.project(projectId)
     if (!project) throw new Error('Unknown project')
     const now = Date.now()
     const rec: SessionRecord = {
       id: randomUUID(),
       projectId,
-      title: extra.title ?? (prompt ? titleFrom(prompt) : 'New session'),
+      title: extra.title ?? (prompt?.trim() ? titleFrom(prompt) : images.length ? 'Photo' : 'New session'),
       createdAt: now,
       lastActivity: now,
       status: 'idle',
@@ -256,32 +272,34 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
     this.store.addSession(rec)
     this.chats.set(rec.id, new ChatLog())
     this.changed()
-    if (prompt) void this.send(rec.id, prompt)
+    if (prompt?.trim() || images.length) void this.send(rec.id, prompt ?? '', images)
     return rec
   }
 
-  async send(id: string, text: string): Promise<void> {
+  async send(id: string, text: string, images: readonly ImageAttachment[] = []): Promise<void> {
     const rec = this.store.session(id)
     if (!rec) throw new Error('Unknown session')
-    if (!text.trim()) return
+    if (!text.trim() && !images.length) return
+    const content = userContent(text, images)
 
     const patch: Partial<SessionRecord> = { lastActivity: Date.now(), unread: false, draft: undefined, error: undefined }
     if (rec.archived) Object.assign(patch, { archived: false, archivedReason: undefined })
-    if (rec.title === 'New session') patch.title = titleFrom(text)
+    if (rec.title === 'New session' && text.trim()) patch.title = titleFrom(text)
     this.patch(id, patch)
 
     await this.getChat(id) // load history first so the new message lands after it
     const uuid = randomUUID()
-    this.emitChat(id, this.chat(id).apply('user', uuid, { role: 'user', content: text }))
+    this.emitChat(id, this.chat(id).apply('user', uuid, { role: 'user', content }))
 
     const live = await this.ensureLive(id)
     if (!live) return
     live.loops.reset()
     live.turnsQueued += 1
+    live.lastPushAt = Date.now()
     this.setStatus(id, live.phase === 'writing-handoff' ? 'handing-off' : 'running')
     live.input.push({
       type: 'user',
-      message: { role: 'user', content: text },
+      message: { role: 'user', content: content as SDKUserMessage['message']['content'] },
       parent_tool_use_id: null,
       uuid: uuid as SDKUserMessage['uuid'],
     })
@@ -371,12 +389,21 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
       phase: 'normal',
       turnsQueued: 0,
       lastAssistantText: '',
+      lastPushAt: 0,
+      handoffAttempts: 0,
     }
 
     const options: Options = {
       cwd: project.folder,
       ...(rec.hasTranscript ? { resume: rec.id } : { sessionId: rec.id }),
-      env: { ...process.env, ELECTRON_RUN_AS_NODE: undefined, ...env.vars, CLAUDE_AGENT_SDK_CLIENT_APP: CLIENT_APP },
+      env: {
+        ...process.env,
+        ELECTRON_RUN_AS_NODE: undefined,
+        ...env.vars,
+        CLAUDE_AGENT_SDK_CLIENT_APP: CLIENT_APP,
+        // session_state_changed messages, which tell this app when a turn is really over.
+        CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS: '1',
+      },
       // Loads ~/.claude settings, the project's .claude/settings*.json, and CLAUDE.md files.
       settingSources: ['user', 'project', 'local'],
       systemPrompt: { type: 'preset', preset: 'claude_code', append: systemAppend(project, Object.keys(env.vars)) },
@@ -428,10 +455,12 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
         } else if (msg.subtype === 'compact_boundary') {
           this.notice(id, 'Claude Code compacted the conversation.')
         } else if (msg.subtype === 'session_state_changed') {
+          live.sdkState = msg.state
           // A state the SDK reports; prompts this app holds open take precedence.
           if (live.pending.size === 0 && msg.state === 'running') {
             this.setStatus(id, live.phase === 'writing-handoff' ? 'handing-off' : 'running')
           }
+          if (msg.state === 'idle') this.checkIdle(id, live)
         }
         return
       }
@@ -457,6 +486,7 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
         if (msg.parent_tool_use_id) return
         // Tool results; the person's own prompts were added when sent (same uuid, so no duplicate).
         this.emitChat(id, this.chat(id).apply('user', msg.uuid ?? randomUUID(), msg.message))
+        if (toolResultTexts(msg.message.content).some(isQuotaGuardStop)) this.onQuotaGuardStop(id, live)
         return
       }
       case 'rate_limit_event': {
@@ -483,7 +513,6 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
 
   private async onTurnEnd(id: string, live: Live, msg: Extract<SDKMessage, { type: 'result' }>): Promise<void> {
     live.turnsQueued = Math.max(0, live.turnsQueued - 1)
-    const settings = this.store.settings
     const rec = this.store.session(id)
     if (!rec) return
 
@@ -493,14 +522,87 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
     }
 
     if (live.phase === 'writing-handoff') {
-      const text = msg.subtype === 'success' && msg.result.trim() ? msg.result : live.lastAssistantText
-      await this.completeHandoff(id, live, text)
+      const resultText = msg.subtype === 'success' ? msg.result : ''
+      // A hook that drops the request (quota-guard does, over its size limit) still ends with a
+      // result, whose text is the hook's notice. Only a reply shaped like a handoff counts.
+      const handoff = pickHandoff([resultText, live.lastAssistantText])
+      if (handoff) await this.completeHandoff(id, live, handoff)
+      else if (live.turnsQueued === 0) this.handoffMissing(id, live, resultText)
+      // Otherwise this result was another turn's, and the request is still waiting.
       return
     }
 
+    if (msg.subtype === 'success' && isQuotaGuardStop(msg.result)) this.onQuotaGuardStop(id, live)
     this.patch(id, { lastActivity: Date.now() })
     if (live.turnsQueued > 0) return // another prompt is already waiting its turn
+    this.onSettled(id, live)
+  }
 
+  /**
+   * quota-guard halted tool calls or dropped a prompt for size. Its limit can sit below this
+   * app's handoff limit, so hand off when the turn ends instead of leaving the session stuck.
+   */
+  private onQuotaGuardStop(id: string, live: Live): void {
+    if (live.phase !== 'normal' || this.store.session(id)?.archived) return
+    live.phase = 'stopping'
+    this.log(`[${id.slice(0, 8)}] quota-guard stopped the session; handing off at turn end`)
+    this.notice(id, 'quota-guard stopped this session for size. Handing off when this turn ends.', 'warn')
+  }
+
+  /**
+   * Claude Code merges a prompt sent mid-turn into that turn, so the prompt gets no result of its
+   * own and turnsQueued stays above 0 after everything is done. 'idle' is the SDK's authoritative
+   * turn-over signal. It must hold for a moment, so that a prompt pushed just before it isn't
+   * counted as finished.
+   */
+  private checkIdle(id: string, live: Live): void {
+    if (live.turnsQueued === 0) return
+    const idleAt = Date.now()
+    clearTimeout(live.idleTimer)
+    live.idleTimer = setTimeout(() => {
+      if (this.live.get(id) !== live || live.sdkState !== 'idle') return
+      if (live.turnsQueued === 0 || live.pending.size > 0 || live.lastPushAt > idleAt) return
+      this.log(`[${id.slice(0, 8)}] idle with ${live.turnsQueued} prompt(s) merged into earlier turns`)
+      live.turnsQueued = 0
+      if (live.phase === 'writing-handoff') {
+        const handoff = pickHandoff([live.lastAssistantText])
+        if (handoff) void this.completeHandoff(id, live, handoff)
+        else this.handoffMissing(id, live, '')
+        return
+      }
+      this.patch(id, { lastActivity: Date.now() })
+      this.onSettled(id, live)
+    }, IDLE_SETTLE_MS)
+  }
+
+  /** The turn ended without a handoff in it: a hook dropped the request, or Claude answered something else. */
+  private handoffMissing(id: string, live: Live, resultText: string): void {
+    this.log(`[${id.slice(0, 8)}] reply had no handoff (attempt ${live.handoffAttempts}): ${firstLine(resultText) || 'empty'}`)
+    if (live.handoffAttempts < 2) {
+      this.notice(id, 'The reply had no handoff in it. Asking again.', 'warn')
+      this.startHandoff(id, live)
+      return
+    }
+    if (live.lastAssistantText.trim()) {
+      // Claude wrote something, just not in the requested shape. Better than stopping here.
+      void this.completeHandoff(id, live, live.lastAssistantText)
+      return
+    }
+    live.phase = 'normal'
+    live.handoffAttempts = 0
+    this.patch(id, { status: 'error', error: 'No handoff came back.' })
+    this.notice(
+      id,
+      `No handoff came back${resultText.trim() ? ` (${firstLine(resultText)})` : ''}. Send a message to retry, or use Hand off now.`,
+      'error',
+    )
+  }
+
+  /** Every prompt sent has finished: go idle, and hand off if the session has grown too large. */
+  private onSettled(id: string, live: Live): void {
+    const settings = this.store.settings
+    const rec = this.store.session(id)
+    if (!rec) return
     this.setStatus(id, 'idle')
     void this.refreshUsage(live)
     const overSize = isOverLimit(rec.lastRequestTokens, rec.baselineTokens ?? 0, settings.handoffTokens)
@@ -573,6 +675,8 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
     live.phase = 'writing-handoff'
     live.lastAssistantText = ''
     live.turnsQueued += 1
+    live.handoffAttempts += 1
+    live.lastPushAt = Date.now()
     this.setStatus(id, 'handing-off')
     const isOver = isOverLimit(rec.lastRequestTokens, rec.baselineTokens ?? 0, this.store.settings.handoffTokens)
     this.notice(
@@ -593,6 +697,7 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
     const project = rec && this.store.project(rec.projectId)
     if (!rec || !project) return
     live.phase = 'normal'
+    live.handoffAttempts = 0
 
     if (!handoff.trim()) {
       this.patch(id, { status: 'error', error: 'The handoff came back empty.' })

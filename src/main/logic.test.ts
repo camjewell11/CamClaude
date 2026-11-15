@@ -2,8 +2,17 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
 import { parseEnv } from './envfiles.ts'
-import { isOverLimit, LoopTracker, requestSize, successorTitle } from './guard.ts'
-import { ChatLog } from './chatlog.ts'
+import {
+  isHandoffText,
+  isOverLimit,
+  isQuotaGuardStop,
+  LoopTracker,
+  pickHandoff,
+  requestSize,
+  successorTitle,
+  toolResultTexts,
+} from './guard.ts'
+import { ChatLog, userContent } from './chatlog.ts'
 
 test('parseEnv handles comments, export, quotes and multi-line values', () => {
   const env = parseEnv(
@@ -87,4 +96,47 @@ test('ChatLog pairs tool results with their calls and hides internal lines', () 
   )
   const tool = log.items[2]
   assert.ok(tool.kind === 'tool' && tool.result === 'a.txt' && tool.summary === 'ls -la')
+})
+
+test('userContent puts images before the text and rejects bad ones', () => {
+  assert.equal(userContent('hi'), 'hi')
+  const blocks = userContent('look', [{ mediaType: 'image/png', data: 'iVBORw0KGgo=' }])
+  assert.ok(Array.isArray(blocks))
+  assert.deepEqual(blocks.map(b => b.type), ['image', 'text'])
+  assert.throws(() => userContent('', [{ mediaType: 'image/heic' as 'image/png', data: 'AAAA' }]))
+  assert.throws(() => userContent('', [{ mediaType: 'image/png', data: 'not base64!' }]))
+
+  const log = new ChatLog()
+  log.apply('user', 'u1', { role: 'user', content: userContent('', [{ mediaType: 'image/jpeg', data: 'AAAA' }]) })
+  const item = log.items[0]
+  assert.ok(item?.kind === 'user' && item.images?.[0] === 'data:image/jpeg;base64,AAAA')
+})
+
+test('pickHandoff skips hook notices and takes a reply with a Next step section', () => {
+  const drop =
+    'Prompt dropped by a hook: quota-guard: this session re-sends 159k tokens with every request.'
+  const real = '## Task\n\nFix it.\n\n## Next step\n\nRun the tests.'
+  assert.equal(isHandoffText(drop), false)
+  assert.equal(isHandoffText(real), true)
+  assert.equal(isHandoffText('### Next steps\n1. Go'), true)
+  assert.equal(isHandoffText('The next step is to run it.'), false)
+  assert.equal(pickHandoff([drop, real]), real)
+  assert.equal(pickHandoff([drop, '']), undefined)
+})
+
+test('isQuotaGuardStop spots a halt in tool results and a dropped prompt', () => {
+  const halt =
+    'quota-guard: tool calls are halted for the rest of this turn because the session is over its size limit.'
+  const drop = 'Prompt dropped by a hook: quota-guard: this session re-sends 159k tokens with every request.'
+  const content = [
+    { type: 'tool_result', tool_use_id: 't1', content: 'ok' },
+    { type: 'tool_result', tool_use_id: 't2', is_error: true, content: [{ type: 'text', text: `<tool_use_error>${halt}</tool_use_error>` }] },
+    { type: 'text', text: halt },
+  ]
+  assert.deepEqual(toolResultTexts(content), ['ok', `<tool_use_error>${halt}</tool_use_error>`])
+  assert.deepEqual(toolResultTexts('a prompt'), [])
+  assert.equal(toolResultTexts(content).some(isQuotaGuardStop), true)
+  assert.equal(isQuotaGuardStop(drop), true)
+  assert.equal(isQuotaGuardStop('quota-guard: 87% of your five-hour limit is used.'), false)
+  assert.equal(isQuotaGuardStop('Tests passed.'), false)
 })

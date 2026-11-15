@@ -104,8 +104,19 @@ export interface RateWindow {
   status?: string
 }
 
+/** A photo or screenshot sent with a message: base64 data without the `data:` prefix. */
+export interface ImageAttachment {
+  mediaType: ImageMediaType
+  data: string
+}
+export type ImageMediaType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
+export const IMAGE_MEDIA_TYPES: readonly ImageMediaType[] = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+/** Claude accepts up to 5 MB per image; this counts the base64 text, to be safe. */
+export const MAX_IMAGE_BASE64 = 5 * 1024 * 1024
+export const MAX_IMAGES = 10
+
 export type ChatItem =
-  | { kind: 'user'; id: string; text: string; isHandoff?: boolean }
+  | { kind: 'user'; id: string; text: string; isHandoff?: boolean; /** data: URLs */ images?: string[] }
   | { kind: 'assistant'; id: string; text: string }
   | {
       kind: 'tool'

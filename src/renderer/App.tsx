@@ -7,6 +7,7 @@ import { NewProjectDialog } from './components/NewProjectDialog'
 import { ProjectDialog } from './components/ProjectDialog'
 import { SettingsDialog } from './components/SettingsDialog'
 import { Sidebar } from './components/Sidebar'
+import { hideKeyboard, useBackToClose, useDrawerSwipe, useKeyboardDismiss } from './touch'
 import { cam } from './util'
 
 export type View = { kind: 'home'; projectId?: string } | { kind: 'session'; id: string }
@@ -31,6 +32,16 @@ export function App() {
   const [connected, setConnected] = useState(true)
   const loaded = useRef(new Set<string>())
   const lastProject = useRef<string | undefined>(undefined)
+  const appRef = useRef<HTMLDivElement>(null)
+  const mainRef = useRef<HTMLElement>(null)
+
+  // Phone gestures (touch.ts): swipe the drawer, hide the keyboard, back button closes the drawer.
+  useDrawerSwipe(appRef, drawer, setDrawer)
+  useKeyboardDismiss(mainRef)
+  useBackToClose(drawer, () => setDrawer(false))
+  useEffect(() => {
+    if (drawer) hideKeyboard()
+  }, [drawer])
 
   useEffect(() => cam().onConnection?.(setConnected), [])
 
@@ -118,14 +129,14 @@ export function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [newSession])
 
-  if (!state) return <div className="app loading" />
+  if (!state) return <div className="app loading" ref={appRef} />
 
   const project = session ? state.projects.find(p => p.id === session.projectId) : undefined
 
   const openDrawer = () => setDrawer(true)
 
   return (
-    <div className={`app ${drawer ? 'drawer-open' : ''}`}>
+    <div className={`app ${drawer ? 'drawer-open' : ''}`} ref={appRef}>
       {!connected && <div className="conn-banner">Reconnecting to your PC…</div>}
       <Sidebar
         state={state}
@@ -149,7 +160,7 @@ export function App() {
         }}
       />
       <div className="scrim" onClick={() => setDrawer(false)} aria-hidden="true" />
-      <main className="main">
+      <main className="main" ref={mainRef}>
         {view.kind === 'session' && session && project ? (
           <ChatView
             key={session.id}

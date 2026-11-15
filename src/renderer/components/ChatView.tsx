@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 
-import type { ChatItem, Project, SessionView, Settings } from '@shared/types'
+import type { ChatItem, ImageAttachment, Project, SessionView, Settings } from '@shared/types'
 import type { View } from '../App'
 import { cam, errorText, indicator, INDICATOR_LABEL, kTokens, sizeTone } from '../util'
 import { Composer } from './Composer'
@@ -45,11 +45,11 @@ export function ChatView({ session, project, settings, items, allSessions, onSel
   const tone = sizeTone(tokens, settings)
   const pct = Math.min(100, (tokens / settings.handoffTokens) * 100)
 
-  const send = async (text: string) => {
+  const send = async (text: string, images: ImageAttachment[]) => {
     setError('')
     pinned.current = true
     try {
-      await cam().send(session.id, text)
+      await cam().send(session.id, text, images)
     } catch (err) {
       setError(errorText(err))
     }

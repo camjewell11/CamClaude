@@ -37,6 +37,13 @@ export const ArchiveIcon = svg(
   </>,
 )
 export const FolderIcon = svg(<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />)
+export const ImageIcon = svg(
+  <>
+    <rect x="3" y="4" width="18" height="16" rx="2.5" />
+    <circle cx="9" cy="9.5" r="1.6" />
+    <path d="m21 16-4.6-4.6a1.5 1.5 0 0 0-2.1 0L6 19.8" />
+  </>,
+)
 export const SendIcon = svg(<path d="M12 19V5M5 12l7-7 7 7" />)
 export const StopIcon = svg(<rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor" />)
 export const MoreIcon = svg(

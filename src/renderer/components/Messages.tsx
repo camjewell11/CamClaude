@@ -1,8 +1,10 @@
 import { memo, useState } from 'react'
 import Markdown from 'react-markdown'
+import { createPortal } from 'react-dom'
 import remarkGfm from 'remark-gfm'
 
 import type { ChatItem } from '@shared/types'
+import { useBackToClose } from '../touch'
 import { ChevronIcon, HandoffIcon, NoteIcon, ToolIcon } from './Icons'
 
 const mdComponents = {
@@ -46,7 +48,13 @@ export const MarkdownText = memo(function MarkdownText({ text }: { text: string 
 export const Message = memo(function Message({ item }: { item: ChatItem }) {
   switch (item.kind) {
     case 'user':
-      return item.isHandoff ? <HandoffMessage text={item.text} /> : <div className="msg-user">{item.text}</div>
+      if (item.isHandoff) return <HandoffMessage text={item.text} />
+      return (
+        <div className="msg-user">
+          {item.images && <UserImages images={item.images} />}
+          {item.text}
+        </div>
+      )
     case 'assistant':
       return (
         <div className="msg-assistant prose">
@@ -111,6 +119,28 @@ function ToolRow({ item }: { item: Extract<ChatItem, { kind: 'tool' }> }) {
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+/** Photos sent with a message. Tap one to see it full screen; tap again, or go back, to close. */
+function UserImages({ images }: { images: string[] }) {
+  const [open, setOpen] = useState<string | null>(null)
+  useBackToClose(open !== null, () => setOpen(null))
+  return (
+    <div className="msg-images">
+      {images.map((src, i) => (
+        <button key={i} className="msg-image" onClick={() => setOpen(src)} aria-label={`View image ${i + 1}`}>
+          <img src={src} alt="" loading="lazy" />
+        </button>
+      ))}
+      {open &&
+        createPortal(
+          <div className="lightbox" onClick={() => setOpen(null)} role="dialog" aria-label="Image">
+            <img src={open} alt="" />
+          </div>,
+          document.body,
+        )}
     </div>
   )
 }

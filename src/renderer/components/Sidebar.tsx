@@ -5,6 +5,7 @@ import type { View } from '../App'
 import { ago, cam, clock, indicator, INDICATOR_LABEL, type Indicator } from '../util'
 import { ArchiveIcon, ChevronIcon, GearIcon, MoreIcon, PlusIcon } from './Icons'
 import { Menu, type MenuItem } from './Menu'
+import { useLongPress } from '../touch'
 
 interface Props {
   state: AppState
@@ -149,6 +150,7 @@ function ProjectGroup(props: {
 }) {
   const { project, sessions, allForProject, filtered, selectedId, now } = props
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
+  const headPress = useLongPress(at => setMenu(at)) // right-click, or long press on a phone
   if (filtered && sessions.length === 0) return null
 
   const collapsed = project.collapsed && !filtered
@@ -165,10 +167,7 @@ function ProjectGroup(props: {
     <section className="project">
       <div
         className="project-head"
-        onContextMenu={e => {
-          e.preventDefault()
-          setMenu({ x: e.clientX, y: e.clientY })
-        }}
+        {...headPress}
       >
         <button
           className="project-toggle"
@@ -177,6 +176,15 @@ function ProjectGroup(props: {
         >
           <ChevronIcon className={`chev ${collapsed ? '' : 'open'}`} size={14} />
           <span className="project-name">{project.name}</span>
+          {collapsed && allForProject.length > 0 && (
+            <span
+              className="project-count"
+              title={`${allForProject.length} unarchived session${allForProject.length === 1 ? '' : 's'}`}
+              aria-label={`${allForProject.length} unarchived session${allForProject.length === 1 ? '' : 's'}`}
+            >
+              {allForProject.length}
+            </span>
+          )}
           {collapsed && waiting > 0 && <StatusDot value="needs-input" title={`${waiting} need your input`} />}
           {collapsed && working > 0 && <StatusDot value="running" title={`${working} working`} />}
         </button>
@@ -210,6 +218,7 @@ function ProjectGroup(props: {
 function SessionRow({ s, selected, now, onSelect }: { s: SessionView; selected: boolean; now: number; onSelect: () => void }) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
   const [renaming, setRenaming] = useState(false)
+  const rowPress = useLongPress(at => setMenu(at)) // right-click, or long press on a phone
   const ind = indicator(s)
   const items: MenuItem[] = s.archived
     ? [
@@ -230,10 +239,7 @@ function SessionRow({ s, selected, now, onSelect }: { s: SessionView; selected: 
         tabIndex={0}
         onClick={onSelect}
         onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && onSelect()}
-        onContextMenu={e => {
-          e.preventDefault()
-          setMenu({ x: e.clientX, y: e.clientY })
-        }}
+        {...rowPress}
         title={`${s.title}\n${INDICATOR_LABEL[ind]}${s.archived ? ` · archived (${s.archivedReason ?? 'manual'})` : ''}`}
       >
         {s.archived ? <ArchiveIcon size={12} className="row-archived" /> : <StatusDot value={ind} />}

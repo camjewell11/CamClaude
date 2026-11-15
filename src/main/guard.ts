@@ -112,6 +112,41 @@ export function handoffRequest(tokens: number): string {
   ].join('\n')
 }
 
+/**
+ * Whether a reply is a handoff: it has the "Next step" section that handoffRequest asks for. A
+ * hook's notice (quota-guard drops prompts over its size limit) or a reply to another prompt
+ * doesn't, and must not become a successor's starting point.
+ */
+export const isHandoffText = (text: string): boolean => /^#{1,4}\s*next\s+steps?\b/im.test(text)
+
+/**
+ * Whether text is quota-guard stopping the session for size: it halted tool calls for the rest of
+ * the turn, or dropped a prompt. quota-guard loads in CamClaude sessions too, and its limit can be
+ * lower than this app's handoff limit; without this, a halted session sits idle with no handoff.
+ */
+export const isQuotaGuardStop = (text: string): boolean =>
+  /quota-guard: (tool calls are halted\b|this session re-sends \d+k tokens)/.test(text)
+
+/** The text of every tool_result block in a user message's content. */
+export function toolResultTexts(content: unknown): string[] {
+  if (!Array.isArray(content)) return []
+  const out: string[] = []
+  for (const block of content as { type?: unknown; content?: unknown }[]) {
+    if (block?.type !== 'tool_result') continue
+    if (typeof block.content === 'string') out.push(block.content)
+    else if (Array.isArray(block.content)) {
+      for (const part of block.content as { type?: unknown; text?: unknown }[]) {
+        if (part?.type === 'text' && typeof part.text === 'string') out.push(part.text)
+      }
+    }
+  }
+  return out
+}
+
+/** The first candidate that is a handoff. */
+export const pickHandoff = (candidates: readonly string[]): string | undefined =>
+  candidates.find(t => isHandoffText(t))
+
 export function successorPrompt(handoff: string, predecessorTitle: string, handoffPath: string): string {
   return [
     `[CamClaude] You're continuing work from the session "${predecessorTitle}", which reached its`,

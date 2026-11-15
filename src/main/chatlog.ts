@@ -1,6 +1,6 @@
 // Turns Claude API messages (live from the SDK, or from a saved transcript) into chat items.
 
-import type { ChatItem } from '../shared/types.ts'
+import { IMAGE_MEDIA_TYPES, MAX_IMAGE_BASE64, MAX_IMAGES, type ChatItem, type ImageAttachment } from '../shared/types.ts'
 
 type Block = { type: string; [k: string]: unknown }
 type ApiMessage = { role?: string; content?: string | Block[] }
@@ -49,6 +49,23 @@ function resultText(content: unknown): string {
 }
 
 const MAX_RESULT = 20_000
+
+/**
+ * The content of a message you send: plain text, or images followed by the text. Throws on an image
+ * Claude would reject, so the error shows in the composer instead of failing the whole turn.
+ */
+export function userContent(text: string, images: readonly ImageAttachment[] = []): string | Block[] {
+  if (!images.length) return text
+  if (images.length > MAX_IMAGES) throw new Error(`Send at most ${MAX_IMAGES} images at a time.`)
+  const blocks: Block[] = images.map(img => {
+    if (!IMAGE_MEDIA_TYPES.includes(img?.mediaType)) throw new Error('Images must be JPEG, PNG, GIF, or WebP.')
+    if (typeof img.data !== 'string' || !/^[A-Za-z0-9+/]+=*$/.test(img.data)) throw new Error('An image could not be read.')
+    if (img.data.length > MAX_IMAGE_BASE64) throw new Error('An image is larger than 5 MB.')
+    return { type: 'image', source: { type: 'base64', media_type: img.mediaType, data: img.data } }
+  })
+  if (text.trim()) blocks.push({ type: 'text', text })
+  return blocks
+}
 
 export class ChatLog {
   readonly items: ChatItem[] = []
@@ -112,6 +129,7 @@ export class ChatLog {
         this.userText(uuid, content, changed)
       } else if (Array.isArray(content)) {
         const texts: string[] = []
+        const images: string[] = []
         for (const b of content) {
           if (b.type === 'tool_result') {
             const id = str(b.tool_use_id)
@@ -125,20 +143,25 @@ export class ChatLog {
             this.upsert({ ...base, result: text, isError: b.is_error === true }, changed)
           } else if (b.type === 'text') {
             texts.push(str(b.text))
+          } else if (b.type === 'image') {
+            const src = (b.source ?? {}) as Record<string, unknown>
+            if (src.type === 'base64') images.push(`data:${str(src.media_type)};base64,${str(src.data)}`)
           }
         }
-        if (texts.length) this.userText(uuid, texts.join('\n'), changed)
+        if (texts.length || images.length) this.userText(uuid, texts.join('\n'), changed, images)
       }
     }
     return [...changed.values()]
   }
 
-  private userText(uuid: string, text: string, changed: Map<string, ChatItem>) {
-    if (!text.trim() || isInternalText(text)) return
+  private userText(uuid: string, text: string, changed: Map<string, ChatItem>, images: string[] = []) {
+    if (!images.length && (!text.trim() || isInternalText(text))) return
     if (text.startsWith(HANDOFF_REQUEST_PREFIX)) {
       this.upsert({ kind: 'notice', id: uuid, tone: 'info', text: 'Size limit reached. Writing a handoff for a fresh session.' }, changed)
       return
     }
-    this.upsert({ kind: 'user', id: uuid, text, isHandoff: text.startsWith(HANDOFF_PREFIX) }, changed)
+    const item: ChatItem = { kind: 'user', id: uuid, text, isHandoff: text.startsWith(HANDOFF_PREFIX) }
+    if (images.length) item.images = images
+    this.upsert(item, changed)
   }
 }

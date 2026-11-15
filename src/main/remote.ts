@@ -75,7 +75,7 @@ function readCookie(req: IncomingMessage, name: string): string {
 
 export class RemoteServer {
   private servers: Server[] = []
-  private readonly wss = new WebSocketServer({ noServer: true, maxPayload: 4 * 1024 * 1024 })
+  private readonly wss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 * 1024 }) // room for photos
   private readonly clients = new Map<WebSocket, { viewer: string; alive: boolean }>()
   private settings: RemoteSettings | null = null
   private error: string | undefined
