@@ -65,9 +65,11 @@ export function ProjectDialog({ project, onClose }: { project: Project; onClose:
       <Field label="Folder">
         <div className="row">
           <code className="path grow">{project.folder}</code>
-          <button className="btn" onClick={() => void cam().openFolder(project.folder)}>
-            Open
-          </button>
+          {!cam().isRemote && (
+            <button className="btn" onClick={() => void cam().openFolder(project.folder)}>
+              Open
+            </button>
+          )}
         </div>
       </Field>
       <Field label="Name">

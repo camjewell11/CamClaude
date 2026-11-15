@@ -118,15 +118,17 @@ export function NewProjectDialog({ settings, projects, onClose, onCreated }: Pro
           <Field label="Folder">
             <div className="row">
               <input className="text-input grow" value={folder} onChange={e => choose(e.target.value)} placeholder="C:\path\to\project" />
-              <button
-                className="btn"
-                onClick={async () => {
-                  const p = await cam().pickFolder(folder || settings.projectsRoot)
-                  if (p) choose(p)
-                }}
-              >
-                Browse…
-              </button>
+              {!cam().isRemote && (
+                <button
+                  className="btn"
+                  onClick={async () => {
+                    const p = await cam().pickFolder(folder || settings.projectsRoot)
+                    if (p) choose(p)
+                  }}
+                >
+                  Browse…
+                </button>
+              )}
             </div>
           </Field>
           {suggestions.length > 0 && (
@@ -158,15 +160,17 @@ export function NewProjectDialog({ settings, projects, onClose, onCreated }: Pro
         <Field label="Create in" hint={target ? <>Creates <code>{target}</code></> : undefined}>
           <div className="row">
             <input className="text-input grow" value={parent} onChange={e => setParent(e.target.value)} />
-            <button
-              className="btn"
-              onClick={async () => {
-                const p = await cam().pickFolder(parent)
-                if (p) setParent(p)
-              }}
-            >
-              Browse…
-            </button>
+            {!cam().isRemote && (
+              <button
+                className="btn"
+                onClick={async () => {
+                  const p = await cam().pickFolder(parent)
+                  if (p) setParent(p)
+                }}
+              >
+                Browse…
+              </button>
+            )}
           </div>
         </Field>
       )}

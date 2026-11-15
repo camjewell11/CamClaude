@@ -4,6 +4,7 @@ import type { AppState } from '@shared/types'
 import { cam, errorText } from '../util'
 import { Composer } from './Composer'
 import { PlusIcon } from './Icons'
+import { MenuButton } from './MenuButton'
 
 interface Props {
   state: AppState
@@ -11,17 +12,24 @@ interface Props {
   onPickProject: (id: string) => void
   onStarted: (sessionId: string) => void
   onNewProject: () => void
+  onMenu: () => void
+  waiting: number
 }
 
 /** The new-session page: pick a project, type the first message. */
-export function HomeView({ state, projectId, onPickProject, onStarted, onNewProject }: Props) {
+export function HomeView({ state, projectId, onPickProject, onStarted, onNewProject, onMenu, waiting }: Props) {
   const [error, setError] = useState('')
   const project = state.projects.find(p => p.id === projectId) ?? state.projects[0]
+  const top = (
+    <div className="home-drag drag">
+      <MenuButton onClick={onMenu} waiting={waiting} />
+    </div>
+  )
 
   if (!project) {
     return (
       <div className="home">
-        <div className="home-drag drag" />
+        {top}
         <div className="home-inner">
           <h1 className="greeting">Start with a project</h1>
           <p className="home-sub">A project is a folder. Its sessions run there and use its CLAUDE.md, settings, and .env files.</p>
@@ -35,7 +43,7 @@ export function HomeView({ state, projectId, onPickProject, onStarted, onNewProj
 
   return (
     <div className="home">
-      <div className="home-drag drag" />
+      {top}
       <div className="home-inner">
         <h1 className="greeting">What are we working on?</h1>
         <Composer

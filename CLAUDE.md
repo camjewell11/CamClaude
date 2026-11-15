@@ -14,8 +14,17 @@ See README.md for features and layout.
 ## Gotchas
 
 - VS Code terminals set `ELECTRON_RUN_AS_NODE=1`, which makes Electron start as plain Node and
-  crash. `npm run dev` and `npm start` clear it (scripts/electron-vite.mjs); clear it yourself
-  before running `npx electron .` or `dist\win-unpacked\CamClaude.exe` from such a terminal.
+  crash. `npm run dev`, `npm start` and `npm run icons` clear it (scripts/run.mjs); clear it
+  yourself before running `npx electron .` or `dist\win-unpacked\CamClaude.exe` from such a terminal.
+- Every UI call goes through `CamApi` (src/shared/api.ts): IPC in the desktop window, a WebSocket
+  for phones (src/renderer/remoteApi.ts → src/main/remote.ts → `dispatch` in index.ts). A new call
+  needs its name in `INVOKE_CHANNELS`, and `DESKTOP_ONLY` if it only makes sense at the PC.
+  Events reach both through `send()` in index.ts, never `win.webContents.send` directly.
+- The phone server serves the built renderer (`out/renderer`), so in `npm run dev` it shows the
+  last `npm run build`, not the live dev server.
+- Write test JSON for the store without a BOM (PowerShell 5.1's `Set-Content -Encoding utf8` adds
+  one); the store strips it now, but other tools may not.
+- `npm run icons` regenerates build/icon.png and src/renderer/public/icon.png from icon.svg.
 - `CAMCLAUDE_DATA_DIR=<dir>` runs the app against a separate data folder. Use it for testing, never
   the real `%APPDATA%\camclaude`. `CAMCLAUDE_SCREENSHOT=<png>` (with optional
   `CAMCLAUDE_SCREENSHOT_JS` and `CAMCLAUDE_SCREENSHOT_WAIT_MS`) captures the window and quits.

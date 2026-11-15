@@ -1,8 +1,139 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
-import type { Settings } from '@shared/types'
-import { cam } from '../util'
+import type { RemoteInfo, Settings } from '@shared/types'
+import { cam, errorText } from '../util'
 import { Field, Modal } from './Modal'
+
+/** Turns the phone server on and off and shows how to connect. Changes apply immediately. */
+function RemoteSection({ settings }: { settings: Settings }) {
+  const [info, setInfo] = useState<RemoteInfo | null>(null)
+  const [port, setPort] = useState(String(settings.remotePort))
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [copied, setCopied] = useState('')
+
+  const refresh = useCallback(() => void cam().remoteInfo().then(setInfo).catch(() => undefined), [])
+  useEffect(refresh, [refresh, settings.remoteEnabled, settings.remoteScope, settings.remotePort, settings.remoteToken])
+
+  if (cam().isRemote) {
+    return <p className="field-hint">You're connected from another device. Manage remote access on the PC.</p>
+  }
+
+  const apply = async (patch: Partial<Settings>) => {
+    setBusy(true)
+    setError('')
+    try {
+      await cam().updateSettings(patch)
+      refresh()
+    } catch (err) {
+      setError(errorText(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="remote">
+      <label className="toggle">
+        <input
+          type="checkbox"
+          checked={settings.remoteEnabled}
+          disabled={busy}
+          onChange={e => void apply({ remoteEnabled: e.target.checked })}
+        />
+        Allow access from my phone and other devices
+      </label>
+      <p className="field-hint">
+        Anyone with the link can run commands on this PC through Claude. Keep it private. While this is on, closing the
+        window keeps CamClaude running in the tray.
+      </p>
+
+      {settings.remoteEnabled && (
+        <>
+          <div className="row two">
+            <Field label="Reachable over">
+              <select
+                className="text-input"
+                value={settings.remoteScope}
+                disabled={busy}
+                onChange={e => void apply({ remoteScope: e.target.value as Settings['remoteScope'] })}
+              >
+                <option value="tailscale">Tailscale only (recommended)</option>
+                <option value="all">Any network, home Wi-Fi included</option>
+              </select>
+            </Field>
+            <Field label="Port">
+              <input
+                className="text-input"
+                type="number"
+                min={1024}
+                max={65535}
+                value={port}
+                onChange={e => setPort(e.target.value)}
+                onBlur={() => {
+                  const n = Number(port)
+                  if (n >= 1024 && n <= 65535 && n !== settings.remotePort) void apply({ remotePort: n })
+                  else setPort(String(settings.remotePort))
+                }}
+              />
+            </Field>
+          </div>
+
+          {info?.error && <div className="remote-warn">{info.error}</div>}
+          {settings.remoteScope === 'tailscale' && info && !info.hasTailscale && (
+            <p className="field-hint">
+              Get Tailscale free at tailscale.com: install it on this PC and on your phone, and sign in to the same account
+              on both. Then reopen this dialog.
+            </p>
+          )}
+
+          {info?.running && info.urls.length > 0 && (
+            <div className="remote-connect">
+              {info.qr && <img className="qr" src={info.qr} alt="QR code for the connect link" width={168} height={168} />}
+              <div className="remote-links">
+                <span className="field-label">
+                  {info.qr
+                    ? "Scan with your phone's camera, or open a link on it."
+                    : 'Only this PC can open this link until Tailscale is connected.'}
+                  {info.clients > 0 && ` ${info.clients} device${info.clients === 1 ? '' : 's'} connected.`}
+                </span>
+                {info.urls.map(u => (
+                  <div key={u} className="row">
+                    <code className="path grow" title={u}>
+                      {u.replace(/\?t=.*/, '?t=…')}
+                    </code>
+                    <button
+                      className="btn"
+                      onClick={() =>
+                        void navigator.clipboard.writeText(u).then(() => {
+                          setCopied(u)
+                          setTimeout(() => setCopied(''), 1200)
+                        })
+                      }
+                    >
+                      {copied === u ? 'Copied' : 'Copy'}
+                    </button>
+                  </div>
+                ))}
+                <span className="field-hint">
+                  On the phone, use “Add to Home Screen” to open it like an app.
+                </span>
+                <button
+                  className="btn ghost danger-text self-start"
+                  disabled={busy}
+                  onClick={() => void cam().regenerateRemoteToken().then(setInfo)}
+                >
+                  Sign out all devices (new link)
+                </button>
+              </div>
+            </div>
+          )}
+          {error && <div className="error-line">{error}</div>}
+        </>
+      )}
+    </div>
+  )
+}
 
 const K = 1000
 
@@ -31,7 +162,12 @@ export function SettingsDialog({ settings, onClose }: { settings: Settings; onCl
           <button
             className="btn primary"
             disabled={invalid}
-            onClick={() => void cam().updateSettings(s).then(onClose)}
+            onClick={() => {
+              // Remote access settings apply on their own (below); don't overwrite them here.
+              const { remoteEnabled, remotePort, remoteScope, remoteToken, ...rest } = s
+              void [remoteEnabled, remotePort, remoteScope, remoteToken]
+              void cam().updateSettings(rest).then(onClose)
+            }}
           >
             Save
           </button>
@@ -71,6 +207,9 @@ export function SettingsDialog({ settings, onClose }: { settings: Settings; onCl
           <input className="text-input" {...num('idleProcessMinutes')} />
         </Field>
       </div>
+
+      <h3>Remote access</h3>
+      <RemoteSection settings={settings} />
 
       <h3>General</h3>
       <label className="toggle">

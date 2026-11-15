@@ -13,6 +13,8 @@ interface StoreData {
   settings: Settings
   /** The plan's usage windows as last seen, so the sidebar has them right after a restart. */
   rateLimits: RateWindow[]
+  /** Small one-off flags, like hints already shown. */
+  flags: Record<string, unknown>
 }
 
 export class Store {
@@ -28,7 +30,8 @@ export class Store {
   private load(defaultProjectsRoot: string): StoreData {
     let parsed: Partial<StoreData> = {}
     try {
-      parsed = JSON.parse(readFileSync(this.file, 'utf8')) as Partial<StoreData>
+      // Strip a byte-order mark: editors like Notepad add one, and JSON.parse rejects it.
+      parsed = JSON.parse(readFileSync(this.file, 'utf8').replace(/^﻿/, '')) as Partial<StoreData>
     } catch {
       // First run, or an unreadable file: start empty. A corrupt file is kept as .bad.
       try {
@@ -50,7 +53,16 @@ export class Store {
       ),
       settings,
       rateLimits: parsed.rateLimits ?? [],
+      flags: parsed.flags ?? {},
     }
+  }
+
+  get(flag: string): unknown {
+    return this.data.flags[flag]
+  }
+  set(flag: string, value: unknown): void {
+    this.data.flags[flag] = value
+    this.save()
   }
 
   get rateLimits(): RateWindow[] {

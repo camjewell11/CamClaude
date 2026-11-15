@@ -26,6 +26,29 @@ running several sessions across projects without watching them all the time.
 - **Usage guards from quota-guard.** The app refuses a tool call that keeps returning the same
   result (the loop guard), and the sidebar shows your plan's 5-hour and weekly usage.
 
+## Use it from your phone
+
+CamClaude can serve the same UI to your phone's browser. Sessions still run on the PC, so the PC
+must be on with CamClaude running. While remote access is on, closing the window keeps CamClaude
+in the system tray.
+
+1. Install [Tailscale](https://tailscale.com) (free) on the PC and the phone, and sign in to the
+   same account on both. This gives the phone a private connection to the PC from anywhere,
+   without exposing anything to the internet.
+2. In CamClaude, open Settings → Remote access and turn on **Allow access from my phone**.
+   Windows may ask whether to allow CamClaude through the firewall; allow it on private networks.
+3. Scan the QR code with the phone's camera. The page opens and remembers the phone.
+4. Optional: in the phone's browser, use **Add to Home Screen** to open it like an app.
+
+**Sign out all devices** issues a new link and disconnects everything that used the old one.
+**Any network** also listens on your home Wi-Fi, so the phone can connect at home without
+Tailscale; only use that on a network you trust.
+
+Security: the link carries a 256-bit token, which the phone trades for an HttpOnly cookie. The
+socket checks the cookie and the page's origin. Anyone with the link can run commands on your PC
+through Claude, so treat it like a password. The connection is plain HTTP; Tailscale encrypts it
+on the way, but on "Any network" without Tailscale, it travels unencrypted over your Wi-Fi.
+
 ## How it works
 
 CamClaude is an Electron app. Its main process drives Claude Code through the
@@ -42,7 +65,9 @@ script is needed.
 | `src/main/chatlog.ts` | Turns SDK and transcript messages into chat items |
 | `src/main/envfiles.ts` | `.env` parsing |
 | `src/main/store.ts` | The app's own records (`%APPDATA%\camclaude\camclaude.json`) |
-| `src/renderer/` | The React UI |
+| `src/main/remote.ts` | The phone server: static UI, token login, WebSocket bridge |
+| `src/renderer/` | The React UI, used by the desktop window and phone browsers alike |
+| `src/renderer/remoteApi.ts` | The UI's API over a WebSocket, used in a phone's browser |
 
 Conversations stay where Claude Code keeps them (`~/.claude/projects`), so `claude --resume`
 still sees them. Handoff documents are saved under `%APPDATA%\camclaude\handoffs\<project>\`.
@@ -86,6 +111,9 @@ npm run smoke      # end to end with real Claude calls (~4 small requests): a tu
 - **Usage bars use an experimental SDK call.** If a future SDK removes it, the bars update only
   from rate-limit events near a limit.
 - **Subagent work isn't shown** in the conversation. Only the main thread is.
+- **No phone notifications.** The phone sees status changes while the page is open, but nothing
+  alerts it when the page is closed or the phone is locked; that would need web push over HTTPS.
+  On the phone, you also can't browse for folders or open them in Explorer; type paths instead.
 - **Windows first.** The code is cross-platform, but only the Windows build has been tested.
 
 ## Credits

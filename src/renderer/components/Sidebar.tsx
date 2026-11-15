@@ -158,7 +158,7 @@ function ProjectGroup(props: {
   const items: MenuItem[] = [
     { label: 'New session', onClick: props.onNewSession },
     { label: 'Project settings…', onClick: props.onSettings },
-    { label: 'Open folder', onClick: () => void cam().openFolder(project.folder) },
+    ...(cam().isRemote ? [] : [{ label: 'Open folder', onClick: () => void cam().openFolder(project.folder) }]),
   ]
 
   return (

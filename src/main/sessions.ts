@@ -116,7 +116,8 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
   private readonly live = new Map<string, Live>()
   private readonly chats = new Map<string, ChatLog>()
   private rateLimits = new Map<string, RateWindow>()
-  private focused: { sessionId: string | null; windowFocused: boolean } = { sessionId: null, windowFocused: true }
+  /** Per viewer (the desktop window, each phone): the session it shows while on screen. */
+  private readonly watchers = new Map<string, string>()
   private stateTimer: NodeJS.Timeout | undefined
   private janitor: NodeJS.Timeout | undefined
 
@@ -171,15 +172,19 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
   }
 
   private isWatching(id: string): boolean {
-    return this.focused.windowFocused && this.focused.sessionId === id
+    for (const watched of this.watchers.values()) if (watched === id) return true
+    return false
   }
 
-  setFocus(sessionId: string | null, windowFocused: boolean): void {
-    this.focused = { sessionId, windowFocused }
-    if (sessionId && windowFocused) {
-      const s = this.store.session(sessionId)
-      if (s?.unread) this.patch(sessionId, { unread: false })
+  /** `sessionId` is what this viewer shows on screen, or null when it's hidden or elsewhere. */
+  setFocus(viewer: string, sessionId: string | null): void {
+    if (!sessionId) {
+      this.watchers.delete(viewer)
+      return
     }
+    this.watchers.set(viewer, sessionId)
+    const s = this.store.session(sessionId)
+    if (s?.unread) this.patch(sessionId, { unread: false })
   }
 
   // ---- chat ---------------------------------------------------------------------------------

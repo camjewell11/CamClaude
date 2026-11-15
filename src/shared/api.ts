@@ -8,6 +8,7 @@ import type {
   NewProjectInput,
   PendingResponse,
   Project,
+  RemoteInfo,
   Settings,
 } from './types.ts'
 
@@ -42,13 +43,23 @@ export interface CamApi {
   setFocus(sessionId: string | null): Promise<void>
 
   updateSettings(patch: Partial<Settings>): Promise<Settings>
+  remoteInfo(): Promise<RemoteInfo>
+  regenerateRemoteToken(): Promise<RemoteInfo>
 
   onState(cb: (s: AppState) => void): () => void
   onChat(cb: (u: ChatUpdate) => void): () => void
   onHandoff(cb: (h: { from: string; to: string }) => void): () => void
   /** A notification was clicked: show this session. */
   onSelect(cb: (sessionId: string) => void): () => void
+
+  /** True in a browser on another device; false in the desktop window. */
+  isRemote: boolean
+  /** Remote only: the link to the PC dropped (false) or came back (true). */
+  onConnection?(cb: (connected: boolean) => void): () => void
 }
+
+/** Calls that only make sense at the PC; a remote client can't make them. */
+export const DESKTOP_ONLY: readonly (keyof CamApi)[] = ['pickFolder', 'openFolder']
 
 /** Invoke channels, named after the CamApi methods they serve. */
 export const INVOKE_CHANNELS = [
@@ -73,4 +84,14 @@ export const INVOKE_CHANNELS = [
   'stopProcess',
   'setFocus',
   'updateSettings',
+  'remoteInfo',
+  'regenerateRemoteToken',
 ] as const satisfies readonly (keyof CamApi)[]
+
+export type InvokeChannel = (typeof INVOKE_CHANNELS)[number]
+
+/** WebSocket messages between a remote client and the PC. */
+export type WireToServer = { id: number; method: InvokeChannel; args: unknown[] }
+export type WireToClient =
+  | { id: number; result?: unknown; error?: string }
+  | { event: 'state' | 'chat' | 'handoff' | 'select'; payload: unknown }

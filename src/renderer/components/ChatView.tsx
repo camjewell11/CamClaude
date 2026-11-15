@@ -6,6 +6,7 @@ import { cam, errorText, indicator, INDICATOR_LABEL, kTokens, sizeTone } from '.
 import { Composer } from './Composer'
 import { ArchiveIcon, FolderIcon, HandoffIcon, MoreIcon } from './Icons'
 import { Menu } from './Menu'
+import { MenuButton } from './MenuButton'
 import { Message } from './Messages'
 import { PendingCard } from './PendingCard'
 import { StatusDot } from './Sidebar'
@@ -17,9 +18,11 @@ interface Props {
   items: ChatItem[] | undefined
   allSessions: SessionView[]
   onSelect: (v: View) => void
+  onMenu: () => void
+  waiting: number
 }
 
-export function ChatView({ session, project, settings, items, allSessions, onSelect }: Props) {
+export function ChatView({ session, project, settings, items, allSessions, onSelect, onMenu, waiting }: Props) {
   const scroller = useRef<HTMLDivElement>(null)
   const pinned = useRef(true)
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
@@ -56,6 +59,7 @@ export function ChatView({ session, project, settings, items, allSessions, onSel
     <div className="chat">
       <header className="chat-head drag">
         <div className="chat-title no-drag">
+          <MenuButton onClick={onMenu} waiting={waiting} />
           <StatusDot value={ind} />
           <span className="title-text" title={session.title}>
             {session.title}
@@ -94,7 +98,7 @@ export function ChatView({ session, project, settings, items, allSessions, onSel
                 session.archived
                   ? { label: 'Unarchive', onClick: () => void cam().unarchive(session.id) }
                   : { label: 'Archive', onClick: () => void cam().archive(session.id) },
-                { label: 'Open project folder', onClick: () => void cam().openFolder(project.folder) },
+                ...(cam().isRemote ? [] : [{ label: 'Open project folder', onClick: () => void cam().openFolder(project.folder) }]),
                 { label: 'Stop Claude Code process', disabled: !session.isLive, onClick: () => void cam().stopProcess(session.id) },
               ]}
             />

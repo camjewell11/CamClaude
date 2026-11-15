@@ -22,6 +22,7 @@ const api = {
   onChat: listen('cam:chat'),
   onHandoff: listen('cam:handoff'),
   onSelect: listen('cam:select'),
+  isRemote: false,
 } as CamApi
 
 contextBridge.exposeInMainWorld('cam', api)

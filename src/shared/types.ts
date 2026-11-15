@@ -75,6 +75,24 @@ export interface Settings {
   projectsRoot: string
   /** Claude Code executable to run; empty uses the one bundled with the Agent SDK. */
   claudeExecutable: string
+  /** Serve the UI to other devices (phone) over the network. */
+  remoteEnabled: boolean
+  remotePort: number
+  /** 'tailscale': only this PC's Tailscale addresses (and localhost). 'all': every network, Wi-Fi included. */
+  remoteScope: 'tailscale' | 'all'
+  /** Secret in the connect link; regenerating it signs every device out. */
+  remoteToken: string
+}
+
+export interface RemoteInfo {
+  running: boolean
+  /** Connect links, token included: open one on the phone, or scan its QR code. */
+  urls: string[]
+  /** QR code (data: URL) for the first link. */
+  qr?: string
+  error?: string
+  hasTailscale: boolean
+  clients: number
 }
 
 export interface RateWindow {
@@ -177,4 +195,8 @@ export const DEFAULT_SETTINGS: Settings = {
   notify: true,
   projectsRoot: '',
   claudeExecutable: '',
+  remoteEnabled: false,
+  remotePort: 8765,
+  remoteScope: 'tailscale',
+  remoteToken: '',
 }
