@@ -218,7 +218,7 @@ export class RemoteServer {
           start_url: `/?t=${encodeURIComponent(t)}`,
           display: 'standalone',
           background_color: '#262624',
-          theme_color: '#1f1e1d',
+          theme_color: '#262624',
           icons: [{ src: '/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' }],
         }),
       )
@@ -238,10 +238,14 @@ export class RemoteServer {
         `<link rel="manifest" href="/manifest.webmanifest?t=${token}" />`,
         '<link rel="icon" href="/icon.svg" />',
         '<link rel="apple-touch-icon" href="/icon.svg" />',
-        '<meta name="theme-color" content="#1f1e1d" />',
+        // The status bar takes the page's own background, light or dark, so it reads as one surface.
+        // "default" keeps the status bar text dark on a light page; "black-translucent" made it
+        // white, which is unreadable on the light theme.
+        '<meta name="theme-color" media="(prefers-color-scheme: light)" content="#faf9f5" />',
+        '<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#262624" />',
         '<meta name="apple-mobile-web-app-capable" content="yes" />',
         '<meta name="mobile-web-app-capable" content="yes" />',
-        '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />',
+        '<meta name="apple-mobile-web-app-status-bar-style" content="default" />',
       ].join('\n    ')
       res.writeHead(200, { 'Content-Type': TYPES['.html'], 'Cache-Control': 'no-store' })
       res.end(html.replace('</head>', `    ${head}\n  </head>`))

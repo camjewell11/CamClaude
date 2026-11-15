@@ -1495,8 +1495,13 @@ textarea.text-input {
   box-shadow: var(--shadow);
 }
 
+/* Phone browsers: behave like an app, not a web page. No gray flash on tap, no double-tap zoom
+   delay, no rubber-band scroll of the whole page, and no text selection on the chrome. */
 html.remote {
   --overlay-gap: 0px; /* no native window buttons in a browser */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
 }
 html.remote .app {
   height: 100dvh;
@@ -1505,10 +1510,70 @@ html.remote .app {
 html.remote .bottom {
   padding-bottom: max(18px, env(safe-area-inset-bottom));
 }
+html.remote body {
+  overscroll-behavior: none;
+}
+html.remote button,
+html.remote .session-row,
+html.remote .project-toggle {
+  touch-action: manipulation;
+}
+html.remote .sidebar,
+html.remote .chat-head,
+html.remote .home-drag {
+  -webkit-user-select: none;
+  user-select: none;
+}
+html.remote .messages {
+  overscroll-behavior: contain;
+}
 
 @media (max-width: 760px) {
+  :root {
+    --titlebar: 52px; /* a phone navigation bar, not a desktop title bar */
+  }
   .menu-button {
     display: inline-grid;
+  }
+  /* 44px: the smallest comfortable touch target. */
+  .chat-head .icon-button,
+  .home-drag .icon-button,
+  .sidebar-foot .icon-button {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+  }
+  .menu-button svg {
+    width: 24px;
+    height: 24px;
+  }
+  .menu-badge {
+    top: 5px;
+    right: 4px;
+  }
+  .chat-head,
+  .home-drag {
+    background: var(--bg);
+  }
+  .sidebar-top {
+    height: 52px;
+    padding: 0 20px;
+  }
+  .side-button {
+    min-height: 44px;
+    font-size: 15px;
+  }
+  .chip {
+    padding: 5px 11px;
+    font-size: 13px;
+  }
+  .project-toggle {
+    min-height: 44px;
+    font-size: 15px;
+  }
+  .project-tools .icon-button.small {
+    width: 36px;
+    height: 36px;
   }
   .sidebar {
     position: fixed;
@@ -1532,8 +1597,10 @@ html.remote .bottom {
     background: rgb(0 0 0 / 40%);
   }
   .session-row {
-    padding-top: 9px;
-    padding-bottom: 9px;
+    min-height: 44px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+    font-size: 15px;
   }
 
   .chat-head {
