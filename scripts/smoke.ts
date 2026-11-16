@@ -1,6 +1,7 @@
 // End-to-end smoke test of SessionManager outside Electron, with real Claude calls (about six
 // small requests): one turn in a throwaway project (with a photo attached), a manual handoff, and a
-// check that the successor does not hand off again. Run: npm run smoke [-- <scratch dir>]
+// check that the successor does not hand off again. The first session picks one add-on
+// (sql-specialist), which the successor must inherit. Run: npm run smoke [-- <scratch dir>]
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -9,6 +10,7 @@ import { randomUUID } from 'node:crypto'
 const root = new URL('../src/main/', import.meta.url).href
 const { Store } = await import(root + 'store.ts')
 const { SessionManager } = await import(root + 'sessions.ts')
+const { AddonStore } = await import(root + 'addons.ts')
 
 const base = process.argv[2] ?? join(tmpdir(), `camclaude-smoke-${Date.now()}`)
 const data = join(base, 'data')
@@ -26,7 +28,7 @@ const project = {
 store.addProject(project)
 
 const logs: string[] = []
-const mgr = new SessionManager(store, join(data, 'handoffs'), (l: string) => logs.push(l))
+const mgr = new SessionManager(store, join(data, 'handoffs'), (l: string) => logs.push(l), new AddonStore(join(data, 'addons'), (l: string) => logs.push(l)))
 const seen: string[] = []
 mgr.on('state', () => {
   for (const s of mgr.views()) {
@@ -42,8 +44,8 @@ mgr.on('handoff', (h: { from: string; to: string }) => seen.push(`HANDOFF ${h.fr
 const RED_PNG = 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAFklEQVR4nGO4oKBAEmIY1TCqYfhqAABLfxAQeNDhBQAAAABJRU5ErkJggg=='
 const first = mgr.createSession(
   project.id,
-  'Reply with exactly the word: pong. Also tell me which environment variable names you were told about, and the color of the attached image in one word.',
-  {},
+  'Reply with exactly the word: pong. Also tell me which environment variable names you were told about, and the color of the attached image in one word. Finally, answer yes or no: is an agent type named sql-specialist:sql-specialist available to you?',
+  { addons: ['sql-specialist'] },
   [{ mediaType: 'image/png', data: RED_PNG }],
 )
 
@@ -95,6 +97,12 @@ const firstChat = await mgr.getChat(first.id)
 const sawImage = firstChat.some((i: { kind: string; images?: string[] }) => i.kind === 'user' && i.images?.length === 1) &&
   firstChat.some((i: { kind: string; text?: string }) => i.kind === 'assistant' && /red/i.test(i.text ?? ''))
 console.log(`--- image attached and described as red: ${sawImage}`)
+const succRec = store.sessions.find((x: { generation: number }) => x.generation === 2)
+const addonWarnings = [...firstChat, ...(succRec ? await mgr.getChat(succRec.id) : [])]
+  .filter((i: { kind: string; text?: string }) => i.kind === 'notice' && /add-on|didn't load/i.test(i.text ?? '') && !/Downloading/.test(i.text ?? ''))
+const sawAddon = firstChat.some((i: { kind: string; text?: string }) => i.kind === 'assistant' && /\byes\b/i.test(i.text ?? ''))
+const addonOk = sawAddon && !addonWarnings.length && JSON.stringify(succRec?.addons) === JSON.stringify(['sql-specialist'])
+console.log(`--- add-on: agent seen ${sawAddon}, warnings ${addonWarnings.length}, successor addons ${JSON.stringify(succRec?.addons)}`)
 const piledUp = !(firstRec.archived && firstRec.archivedReason === 'handoff' && firstRec.successorId) || visible !== 1
 console.log(`--- visible sessions after handoff: ${visible}, first archived: ${firstRec.archived} (${firstRec.archivedReason})`)
 const verdict = !settledAfterQuickPrompts
@@ -107,6 +115,8 @@ const verdict = !settledAfterQuickPrompts
       ? 'SMOKE FAIL: the handed-off session was not archived'
       : !sawImage
         ? 'SMOKE FAIL: the attached image did not reach Claude'
-        : 'SMOKE OK'
+        : !addonOk
+          ? 'SMOKE FAIL: the add-on did not load or was not inherited'
+          : 'SMOKE OK'
 console.log(verdict)
 process.exit(verdict === 'SMOKE OK' ? 0 : 1)

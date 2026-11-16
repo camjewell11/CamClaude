@@ -9,6 +9,9 @@ See README.md for features and layout.
 - `npm run typecheck`, `npm test`: run both before saying a change is done
 - `npm run smoke`: end to end against real Claude (spends a little usage); run it after changing
   `sessions.ts`, `guard.ts`, or the SDK version
+- `npm run addons:check -- <empty dir>`: downloads and builds every add-on into that folder and
+  lists the agents and skills Claude Code loads from them, with no model call; run it after changing
+  `src/shared/addons.ts` or `src/main/addons.ts`
 - `npm run dist`: Windows installer in `dist/`
 
 ## Gotchas
@@ -27,7 +30,8 @@ See README.md for features and layout.
 - `npm run icons` regenerates build/icon.png and src/renderer/public/icon.png from icon.svg.
 - `CAMCLAUDE_DATA_DIR=<dir>` runs the app against a separate data folder. Use it for testing, never
   the real `%APPDATA%\camclaude`. `CAMCLAUDE_SCREENSHOT=<png>` (with optional
-  `CAMCLAUDE_SCREENSHOT_JS` and `CAMCLAUDE_SCREENSHOT_WAIT_MS`) captures the window and quits.
+  `CAMCLAUDE_SCREENSHOT_JS`, `CAMCLAUDE_SCREENSHOT_WAIT_MS`, and
+  `CAMCLAUDE_SCREENSHOT_SIZE=390x844` for the phone layout) captures the window and quits.
 - The main process is ESM, because the SDK is ESM-only; the preload must stay CommonJS (`index.cjs`),
   because the renderer is sandboxed.
 - Files under `src/main` that tests import must run under `node --experimental-strip-types`:

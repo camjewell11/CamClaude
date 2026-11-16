@@ -4,6 +4,7 @@ import { groupToolRuns } from '@shared/toolGroups'
 import type { ChatItem, ImageAttachment, Project, SessionView, Settings } from '@shared/types'
 import type { View } from '../App'
 import { cam, errorText, indicator, INDICATOR_LABEL, kTokens, sizeTone } from '../util'
+import { addonLabels } from './AddonsDialog'
 import { Composer } from './Composer'
 import { ArchiveIcon, FolderIcon, HandoffIcon, MoreIcon } from './Icons'
 import { Menu } from './Menu'
@@ -72,6 +73,11 @@ export function ChatView({ session, project, settings, items, allSessions, onSel
         </div>
         <div className="chat-tools no-drag">
           <span className={`status-label s-${ind}`}>{INDICATOR_LABEL[ind]}</span>
+          {session.addons && session.addons.length > 0 && (
+            <span className="chip chip-static" title={`Add-ons: ${addonLabels(session.addons)}`}>
+              {session.addons.length === 1 ? '1 add-on' : `${session.addons.length} add-ons`}
+            </span>
+          )}
           {tokens > 0 && (
             <span
               className={`size-meter tone-${tone}`}

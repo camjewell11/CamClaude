@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto'
 
 import type { CamApi, FolderInfo, InvokeChannel } from '../shared/api.ts'
 import type { AppState, NewProjectInput, PendingResponse, Project, Settings } from '../shared/types.ts'
+import { AddonStore } from './addons.ts'
 import { newToken, RemoteServer } from './remote.ts'
 import { SessionManager } from './sessions.ts'
 import { Store } from './store.ts'
@@ -32,7 +33,7 @@ const log = (line: string) => {
 }
 
 const store = new Store(userData, '')
-const sessions = new SessionManager(store, join(userData, 'handoffs'), log)
+const sessions = new SessionManager(store, join(userData, 'handoffs'), log, new AddonStore(join(userData, 'addons'), log))
 let win: BrowserWindow | null = null
 let tray: Tray | null = null
 let quitting = false
@@ -143,10 +144,16 @@ function syncTray(): void {
 /**
  * Development aid: capture the window to a PNG, then quit. CAMCLAUDE_SCREENSHOT_JS runs in the
  * page first (it can use window.cam), and CAMCLAUDE_SCREENSHOT_WAIT_MS waits after it.
+ * CAMCLAUDE_SCREENSHOT_SIZE=<width>x<height> sets the page size first, for example 390x844.
  */
 async function screenshotAndQuit(path: string): Promise<void> {
   const w = win!
   await new Promise<void>(r => w.webContents.once('did-finish-load', () => r()))
+  const size = /^(\d+)x(\d+)$/.exec(process.env.CAMCLAUDE_SCREENSHOT_SIZE ?? '')
+  if (size) {
+    w.setMinimumSize(1, 1)
+    w.setContentSize(Number(size[1]), Number(size[2]))
+  }
   await new Promise(r => setTimeout(r, 1500))
   const js = process.env.CAMCLAUDE_SCREENSHOT_JS
   if (js) {
@@ -285,7 +292,8 @@ const handlers: Handlers = {
   },
   knownFolders: () => sessions.knownFolders(),
   folderInfo: async path => folderInfo(path),
-  createSession: async (projectId, prompt, images) => sessions.createSession(projectId, prompt, {}, images ?? []).id,
+  createSession: async (projectId, prompt, images, addons) =>
+    sessions.createSession(projectId, prompt, { addons: Array.isArray(addons) ? addons : [] }, images ?? []).id,
   send: (id, text, images) => sessions.send(id, text, images ?? []),
   interrupt: id => sessions.interrupt(id),
   respond: async (id, requestId, response: PendingResponse) => sessions.respond(id, requestId, response),

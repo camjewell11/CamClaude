@@ -14,6 +14,8 @@ import {
 } from './guard.ts'
 import { ChatLog, userContent } from './chatlog.ts'
 import { groupToolRuns, toolNameSummary } from '../shared/toolGroups.ts'
+import { ADDONS, ADDON_SOURCES, addonById, cleanAddonIds } from '../shared/addons.ts'
+import { pluginDirName, pluginManifest, sourceDirName } from './addons.ts'
 
 test('parseEnv handles comments, export, quotes and multi-line values', () => {
   const env = parseEnv(
@@ -168,4 +170,37 @@ test('groupToolRuns folds adjacent tool calls and keeps lone ones as cards', () 
   assert.ok(first.kind === 'tools')
   assert.equal(toolNameSummary(first.tools), 'Bash ×2, Read')
   assert.deepEqual(groupToolRuns([]), [])
+})
+
+test('cleanAddonIds keeps known ids once, in catalog order', () => {
+  assert.deepEqual(cleanAddonIds(undefined), [])
+  assert.deepEqual(cleanAddonIds([]), [])
+  assert.deepEqual(
+    cleanAddonIds(['taste-skill', 'nope', 'react-specialist', 42, 'taste-skill', null]),
+    ['react-specialist', 'taste-skill'],
+  )
+})
+
+test('add-on catalog ids are unique and every entry has a source', () => {
+  const ids = ADDONS.map(a => a.id)
+  assert.equal(new Set(ids).size, ids.length)
+  assert.equal(ids.length, 14)
+  for (const a of ADDONS) {
+    assert.ok(ADDON_SOURCES[a.source], a.id)
+    assert.match(a.id, /^[a-z0-9-]+$/)
+    if (a.kind === 'agent') assert.match(a.path, /.md$/, a.id)
+  }
+})
+
+test('pluginManifest and folder names carry the add-on id and pinned commit', () => {
+  const def = addonById('code-reviewer')
+  assert.ok(def)
+  const commit8 = ADDON_SOURCES[def.source].commit.slice(0, 8)
+  assert.equal(pluginDirName(def), `code-reviewer-${commit8}`)
+  assert.equal(sourceDirName('fullstack-dev'), `fullstack-dev-${commit8}`)
+  const manifest = JSON.parse(pluginManifest(def))
+  assert.equal(manifest.name, 'code-reviewer')
+  assert.equal(manifest.license, 'MIT')
+  assert.equal(manifest.repository, 'https://github.com/runxgalee/fullstack-dev')
+  assert.ok(manifest.description.includes(commit8))
 })

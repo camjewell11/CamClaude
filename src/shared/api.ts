@@ -31,7 +31,8 @@ export interface CamApi {
   knownFolders(): Promise<KnownFolder[]>
   folderInfo(path: string): Promise<FolderInfo>
 
-  createSession(projectId: string, prompt?: string, images?: ImageAttachment[]): Promise<string>
+  /** addons: ids from src/shared/addons.ts that this session (and its successors) load. */
+  createSession(projectId: string, prompt?: string, images?: ImageAttachment[], addons?: string[]): Promise<string>
   send(sessionId: string, text: string, images?: ImageAttachment[]): Promise<void>
   interrupt(sessionId: string): Promise<void>
   respond(sessionId: string, requestId: string, response: PendingResponse): Promise<void>

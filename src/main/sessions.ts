@@ -56,6 +56,8 @@ import {
   toolResultTexts,
 } from './guard.ts'
 import type { Store } from './store.ts'
+import type { AddonStore } from './addons.ts'
+import { addonById, cleanAddonIds } from '../shared/addons.ts'
 
 const CLIENT_APP = 'camclaude/0.1.0'
 
@@ -141,12 +143,14 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
   private readonly store: Store
   private readonly handoffDir: string
   private readonly log: (line: string) => void
+  private readonly addons?: AddonStore
 
-  constructor(store: Store, handoffDir: string, log: (line: string) => void) {
+  constructor(store: Store, handoffDir: string, log: (line: string) => void, addons?: AddonStore) {
     super()
     this.store = store
     this.handoffDir = handoffDir
     this.log = log
+    this.addons = addons
     for (const w of store.rateLimits) this.rateLimits.set(w.kind, w)
   }
 
@@ -249,13 +253,14 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
   createSession(
     projectId: string,
     prompt?: string,
-    extra: Partial<Pick<SessionRecord, 'title' | 'predecessorId' | 'generation' | 'draft'>> = {},
+    extra: Partial<Pick<SessionRecord, 'title' | 'predecessorId' | 'generation' | 'draft' | 'addons'>> = {},
     images: readonly ImageAttachment[] = [],
   ): SessionRecord {
     userContent(prompt ?? '', images) // reject a bad image before the session exists
     const project = this.store.project(projectId)
     if (!project) throw new Error('Unknown project')
     const now = Date.now()
+    const addons = cleanAddonIds(extra.addons)
     const rec: SessionRecord = {
       id: randomUUID(),
       projectId,
@@ -271,6 +276,7 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
       generation: extra.generation ?? 1,
       predecessorId: extra.predecessorId,
       draft: extra.draft,
+      ...(addons.length ? { addons } : {}),
     }
     this.store.addSession(rec)
     this.chats.set(rec.id, new ChatLog())
@@ -374,6 +380,35 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
 
   // ---- starting a Claude Code process ------------------------------------------------------
 
+  /** Plugin folders for the session's add-ons. A failure is a notice; the session starts without it. */
+  private async addonPlugins(id: string, ids: readonly string[]): Promise<string[]> {
+    if (!ids.length) return []
+    if (!this.addons) {
+      this.notice(id, 'Add-ons are unavailable here; starting without them.', 'warn')
+      return []
+    }
+    if (this.addons.needsDownload(ids)) this.notice(id, 'Downloading add-ons for their first use…')
+    const { paths, errors } = await this.addons.prepare(ids)
+    if (errors.length) this.notice(id, `Couldn't load some add-ons; continuing without them. ${errors.join('; ')}`, 'warn')
+    return paths
+  }
+
+  /** Warns when Claude Code didn't load an add-on the session asked for. */
+  private checkAddonsLoaded(
+    id: string,
+    plugins: readonly { name: string }[],
+    errors: readonly { plugin: string; message: string }[],
+  ): void {
+    const wanted = this.store.session(id)?.addons ?? []
+    if (!wanted.length) return
+    const loaded = new Set(plugins.map(p => p.name))
+    const missing = wanted.filter(a => !loaded.has(a)).map(a => addonById(a)?.label ?? a)
+    const own = errors.filter(e => wanted.includes(e.plugin)).map(e => `${e.plugin}: ${e.message}`)
+    if (missing.length || own.length) {
+      this.notice(id, `Claude Code didn't load ${missing.join(', ') || 'every add-on'}.${own.length ? ` ${own.join('; ')}` : ''}`, 'warn')
+    }
+  }
+
   private async ensureLive(id: string): Promise<Live | undefined> {
     const existing = this.live.get(id)
     if (existing) return existing
@@ -383,6 +418,7 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
 
     const env = await loadEnvFiles(project.folder, project.envFiles)
     if (env.missing.length) this.notice(id, `Couldn't read ${env.missing.join(', ')}; continuing without it.`, 'warn')
+    const plugins = await this.addonPlugins(id, rec.addons ?? [])
 
     const live: Live = {
       q: undefined as unknown as Query,
@@ -413,6 +449,8 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
       permissionMode: project.permissionMode,
       allowDangerouslySkipPermissions: project.permissionMode === 'bypassPermissions',
       model: project.model || undefined,
+      // Only the add-ons this session opted in to; the user's own plugins load from settings as usual.
+      ...(plugins.length ? { plugins: plugins.map(path => ({ type: 'local' as const, path })) } : {}),
       pathToClaudeCodeExecutable: claudeBinary(this.store.settings.claudeExecutable),
       canUseTool: this.canUseTool(id, live),
       hooks: {
@@ -455,6 +493,7 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
       case 'system': {
         if (msg.subtype === 'init') {
           if (!this.store.session(id)?.hasTranscript) this.patch(id, { hasTranscript: true })
+          this.checkAddonsLoaded(id, msg.plugins ?? [], msg.plugin_errors ?? [])
         } else if (msg.subtype === 'compact_boundary') {
           this.notice(id, 'Claude Code compacted the conversation.')
         } else if (msg.subtype === 'session_state_changed') {
@@ -726,6 +765,7 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
       title: successorTitle(rec.title, rec.generation + 1),
       predecessorId: id,
       generation: rec.generation + 1,
+      addons: rec.addons,
       draft: auto ? undefined : prompt,
     })
     this.notice(id, `Handed off to “${successor.title}”. This session is archived.`)

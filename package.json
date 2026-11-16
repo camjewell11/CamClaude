@@ -16,6 +16,7 @@
     "test": "node --experimental-strip-types --no-warnings --test src/main/logic.test.ts",
     "icons": "node scripts/run.mjs electron scripts/make-icons.mjs",
     "smoke": "node --experimental-strip-types --no-warnings scripts/smoke.ts",
+    "addons:check": "node --experimental-strip-types --no-warnings scripts/addon-check.ts",
     "dist": "npm run typecheck && npm test && electron-vite build && electron-builder --win nsis",
     "dist:dir": "electron-vite build && electron-builder --win dir"
   },

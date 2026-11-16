@@ -49,6 +49,8 @@ export interface SessionRecord {
   baselineTokens?: number
   /** Number of the session in its handoff chain: 1 for the first, 2 for its successor, ... */
   generation: number
+  /** Add-on ids (src/shared/addons.ts) this session loads; successors inherit them. */
+  addons?: string[]
   /** Text waiting in the composer, e.g. a handoff when auto-continue is off. */
   draft?: string
   error?: string

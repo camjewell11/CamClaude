@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 import type { AppState } from '@shared/types'
 import { cam, errorText } from '../util'
+import { AddonsButton } from './AddonsDialog'
 import { Composer } from './Composer'
 import { PlusIcon } from './Icons'
 import { MenuButton } from './MenuButton'
@@ -19,6 +20,8 @@ interface Props {
 /** The new-session page: pick a project, type the first message. */
 export function HomeView({ state, projectId, onPickProject, onStarted, onNewProject, onMenu, waiting }: Props) {
   const [error, setError] = useState('')
+  // Per session, never remembered: every new session starts with no add-ons.
+  const [addons, setAddons] = useState<string[]>([])
   const project = state.projects.find(p => p.id === projectId) ?? state.projects[0]
   const top = (
     <div className="home-drag drag">
@@ -53,25 +56,30 @@ export function HomeView({ state, projectId, onPickProject, onStarted, onNewProj
           onSend={async (text, images) => {
             setError('')
             try {
-              onStarted(await cam().createSession(project.id, text, images))
+              const id = await cam().createSession(project.id, text, images, addons)
+              setAddons([])
+              onStarted(id)
             } catch (err) {
               setError(errorText(err))
             }
           }}
           footer={
-            <select
-              className="project-select"
-              value={project.id}
-              onChange={e => onPickProject(e.target.value)}
-              aria-label="Project"
-              title={project.folder}
-            >
-              {state.projects.map(p => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
+            <div className="home-footer">
+              <select
+                className="project-select"
+                value={project.id}
+                onChange={e => onPickProject(e.target.value)}
+                aria-label="Project"
+                title={project.folder}
+              >
+                {state.projects.map(p => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+              <AddonsButton value={addons} onChange={setAddons} />
+            </div>
           }
         />
         {error && <div className="error-line">{error}</div>}
