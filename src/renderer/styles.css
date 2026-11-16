@@ -1264,6 +1264,19 @@ code {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  /* The bottom area doesn't scroll, so a tall card (several questions) scrolls inside itself. */
+  max-height: 65vh;
+  max-height: 65dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.pending-card > .pending-actions:last-child {
+  position: sticky;
+  bottom: -12px;
+  margin: 0 -14px -12px;
+  padding: 10px 14px 12px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
 }
 .pending-title {
   font-weight: 600;
