@@ -101,6 +101,25 @@ test('ChatLog pairs tool results with their calls and hides internal lines', () 
   assert.ok(tool.kind === 'tool' && tool.result === 'a.txt' && tool.summary === 'ls -la')
 })
 
+test("ChatLog files Claude Code's image note under the tool call that returned the image", () => {
+  const log = new ChatLog()
+  log.apply('assistant', 'a1', {
+    content: [{ type: 'tool_use', id: 'toolu_img', name: 'Read', input: { file_path: 'C:\\shot.png' } }],
+  })
+  const image = { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AAAA' } }
+  log.apply('user', 'u1', { content: [{ type: 'tool_result', tool_use_id: 'toolu_img', content: [image] }] })
+  const note = '[Image: original 1280x4427, displayed at 745x2576. Multiply coordinates by 1.72 to map to original image.]'
+  log.apply('user', 'u2', { role: 'user', content: note })
+  log.apply('user', 'u2', { role: 'user', content: note }) // a repeat must not add it twice
+  assert.deepEqual(log.items.map(i => i.kind), ['tool'])
+  const tool = log.items[0]
+  assert.ok(tool.kind === 'tool' && tool.result === `[image]\n${note}`)
+
+  // Ordinary text that mentions an image is still the person's message.
+  log.apply('user', 'u3', { role: 'user', content: '[Image: my screenshot] what is wrong here?' })
+  assert.equal(log.items.at(-1)?.kind, 'user')
+})
+
 test('userContent puts images before the text and rejects bad ones', () => {
   assert.equal(userContent('hi'), 'hi')
   const blocks = userContent('look', [{ mediaType: 'image/png', data: 'iVBORw0KGgo=' }])

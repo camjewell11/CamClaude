@@ -13,6 +13,13 @@ const isInternalText = (t: string) =>
   /^\s*<(command-name|command-message|local-command-stdout|local-command-stderr|system-reminder)>/.test(t) ||
   t.startsWith('Caveat: The messages below were generated')
 
+/**
+ * The note Claude Code adds as its own user-role message after a tool returns an image, for
+ * example "[Image: original 1280x4427, displayed at 745x2576. Multiply coordinates by …]". It
+ * belongs to that tool call, not to the person.
+ */
+const IMAGE_NOTE = /^\[Image: original \d+x\d+(?:[,.][^\]\n]*)?\]$/
+
 const str = (v: unknown) => (typeof v === 'string' ? v : '')
 
 export function toolSummary(name: string, input: unknown): string {
@@ -70,6 +77,10 @@ export function userContent(text: string, images: readonly ImageAttachment[] = [
 export class ChatLog {
   readonly items: ChatItem[] = []
   private readonly index = new Map<string, number>()
+  /** The tool call an image note attaches to: the one whose call or result came last. */
+  private lastToolId: string | undefined
+  /** Image notes already attached, so applying the same message twice doesn't repeat it. */
+  private readonly notesAttached = new Set<string>()
 
   private upsert(item: ChatItem, changed: Map<string, ChatItem>) {
     const at = this.index.get(item.id)
@@ -109,6 +120,7 @@ export class ChatLog {
           this.upsert({ kind: 'assistant', id: `${uuid}:${n}`, text: str(b.text) }, changed)
         } else if (b.type === 'tool_use') {
           const id = str(b.id) || `${uuid}:${n}`
+          this.lastToolId = id
           const prev = this.get(id)
           this.upsert(
             {
@@ -133,6 +145,7 @@ export class ChatLog {
         for (const b of content) {
           if (b.type === 'tool_result') {
             const id = str(b.tool_use_id)
+            this.lastToolId = id
             const prev = this.get(id)
             let text = resultText(b.content)
             if (text.length > MAX_RESULT) text = `${text.slice(0, MAX_RESULT)}\n… (${text.length - MAX_RESULT} more characters)`
@@ -156,6 +169,16 @@ export class ChatLog {
 
   private userText(uuid: string, text: string, changed: Map<string, ChatItem>, images: string[] = []) {
     if (!images.length && (!text.trim() || isInternalText(text))) return
+    if (!images.length && IMAGE_NOTE.test(text.trim())) {
+      // Show it inside the tool call that returned the image; with no call to attach to, hide it.
+      const tool = this.lastToolId === undefined ? undefined : this.get(this.lastToolId)
+      if (tool?.kind === 'tool' && !this.notesAttached.has(uuid)) {
+        this.notesAttached.add(uuid)
+        const note = text.trim()
+        this.upsert({ ...tool, result: tool.result ? `${tool.result}\n${note}` : note }, changed)
+      }
+      return
+    }
     if (text.startsWith(HANDOFF_REQUEST_PREFIX)) {
       this.upsert({ kind: 'notice', id: uuid, tone: 'info', text: 'Size limit reached. Writing a handoff for a fresh session.' }, changed)
       return
