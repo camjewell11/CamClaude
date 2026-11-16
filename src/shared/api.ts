@@ -31,8 +31,13 @@ export interface CamApi {
   knownFolders(): Promise<KnownFolder[]>
   folderInfo(path: string): Promise<FolderInfo>
 
-  /** addons: ids from src/shared/addons.ts that this session (and its successors) load. */
-  createSession(projectId: string, prompt?: string, images?: ImageAttachment[], addons?: string[]): Promise<string>
+  /**
+   * addons: ids from src/shared/addons.ts that this session (and its successors) load.
+   * model: an alias or id for this session (and its successors); empty uses the project's model.
+   */
+  createSession(projectId: string, prompt?: string, images?: ImageAttachment[], addons?: string[], model?: string): Promise<string>
+  /** Switches the session's model; '' goes back to the project's model. */
+  setModel(sessionId: string, model: string): Promise<void>
   send(sessionId: string, text: string, images?: ImageAttachment[]): Promise<void>
   interrupt(sessionId: string): Promise<void>
   respond(sessionId: string, requestId: string, response: PendingResponse): Promise<void>
@@ -75,6 +80,7 @@ export const INVOKE_CHANNELS = [
   'knownFolders',
   'folderInfo',
   'createSession',
+  'setModel',
   'send',
   'interrupt',
   'respond',

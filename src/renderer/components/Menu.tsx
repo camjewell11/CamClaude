@@ -6,6 +6,10 @@ export interface MenuItem {
   onClick: () => void
   danger?: boolean
   disabled?: boolean
+  /** Marks the current choice in a menu of options. */
+  checked?: boolean
+  /** A second, quieter line under the label. */
+  hint?: string
 }
 
 /** A small context menu at a screen point; closes on outside click, Escape, or a choice. */
@@ -19,7 +23,7 @@ export function Menu({ at, items, onClose }: { at: { x: number; y: number }; ite
     const r = el.getBoundingClientRect()
     setPos({
       x: Math.min(at.x, window.innerWidth - r.width - 8),
-      y: Math.min(at.y, window.innerHeight - r.height - 8),
+      y: Math.max(8, Math.min(at.y, window.innerHeight - r.height - 8)),
     })
     el.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus()
   }, [at])
@@ -41,18 +45,26 @@ export function Menu({ at, items, onClose }: { at: { x: number; y: number }; ite
 
   return createPortal(
     <div ref={ref} className="menu" role="menu" style={{ left: pos.x, top: pos.y }}>
-      {items.map(item => (
+      {items.map((item, i) => (
         <button
-          key={item.label}
-          role="menuitem"
-          className={item.danger ? 'danger' : undefined}
+          key={`${i}:${item.label}`}
+          role={item.checked === undefined ? 'menuitem' : 'menuitemradio'}
+          aria-checked={item.checked}
+          className={[item.danger && 'danger', item.checked !== undefined && 'choice', item.checked && 'checked'].filter(Boolean).join(' ') || undefined}
           disabled={item.disabled}
           onClick={() => {
             onClose()
             item.onClick()
           }}
         >
-          {item.label}
+          {item.hint ? (
+            <span className="menu-two-line">
+              <span>{item.label}</span>
+              <span className="menu-hint">{item.hint}</span>
+            </span>
+          ) : (
+            item.label
+          )}
         </button>
       ))}
     </div>,

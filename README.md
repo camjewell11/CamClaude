@@ -23,6 +23,10 @@ running several sessions across projects without watching them all the time.
 - **Auto-archive.** Handed-off sessions are archived right away, and idle sessions after 24 hours
   (configurable). Archiving hides a session. It doesn't delete it, and sending a message brings it
   back. Idle Claude Code processes stop after 10 minutes and resume on your next message.
+- **Model per session.** The chat header shows the model the session runs on. Click it to switch;
+  a running session changes from its next request. On the new-session page, the **Model** chip picks
+  the model before the first message. **Project default** follows the project's Model setting
+  (blank uses Claude Code's default). Handoff successors keep the session's model.
 - **Usage guards from quota-guard.** The app refuses a tool call that keeps returning the same
   result (the loop guard), and the sidebar shows your plan's 5-hour and weekly usage.
 

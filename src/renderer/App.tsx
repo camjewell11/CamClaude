@@ -167,6 +167,7 @@ export function App() {
             session={session}
             project={project}
             settings={state.settings}
+            models={state.models ?? []}
             items={chats[session.id]}
             allSessions={state.sessions}
             onSelect={setView}

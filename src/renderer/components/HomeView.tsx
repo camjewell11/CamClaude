@@ -6,6 +6,7 @@ import { AddonsButton } from './AddonsDialog'
 import { Composer } from './Composer'
 import { PlusIcon } from './Icons'
 import { MenuButton } from './MenuButton'
+import { ModelPicker } from './ModelPicker'
 
 interface Props {
   state: AppState
@@ -22,6 +23,8 @@ export function HomeView({ state, projectId, onPickProject, onStarted, onNewProj
   const [error, setError] = useState('')
   // Per session, never remembered: every new session starts with no add-ons.
   const [addons, setAddons] = useState<string[]>([])
+  // Also per session: '' follows the project's model.
+  const [model, setModel] = useState('')
   const project = state.projects.find(p => p.id === projectId) ?? state.projects[0]
   const top = (
     <div className="home-drag drag">
@@ -56,8 +59,9 @@ export function HomeView({ state, projectId, onPickProject, onStarted, onNewProj
           onSend={async (text, images) => {
             setError('')
             try {
-              const id = await cam().createSession(project.id, text, images, addons)
+              const id = await cam().createSession(project.id, text, images, addons, model)
               setAddons([])
+              setModel('')
               onStarted(id)
             } catch (err) {
               setError(errorText(err))
@@ -78,6 +82,7 @@ export function HomeView({ state, projectId, onPickProject, onStarted, onNewProj
                   </option>
                 ))}
               </select>
+              <ModelPicker prefix="Model" value={model} projectModel={project.model} models={state.models ?? []} onChange={setModel} />
               <AddonsButton value={addons} onChange={setAddons} />
             </div>
           }

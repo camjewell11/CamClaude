@@ -5,6 +5,7 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
 import { DEFAULT_SETTINGS, type Project, type RateWindow, type SessionRecord, type Settings } from '../shared/types.ts'
+import { cleanModelChoices, type ModelChoice } from '../shared/models.ts'
 
 interface StoreData {
   version: 1
@@ -13,6 +14,8 @@ interface StoreData {
   settings: Settings
   /** The plan's usage windows as last seen, so the sidebar has them right after a restart. */
   rateLimits: RateWindow[]
+  /** The models Claude Code listed last, so the model picker has them before a session starts. */
+  models: ModelChoice[]
   /** Small one-off flags, like hints already shown. */
   flags: Record<string, unknown>
 }
@@ -53,6 +56,7 @@ export class Store {
       ),
       settings,
       rateLimits: parsed.rateLimits ?? [],
+      models: cleanModelChoices(parsed.models),
       flags: parsed.flags ?? {},
     }
   }
@@ -70,6 +74,14 @@ export class Store {
   }
   setRateLimits(windows: RateWindow[]): void {
     this.data.rateLimits = windows
+    this.save()
+  }
+
+  get models(): ModelChoice[] {
+    return this.data.models
+  }
+  setModels(models: ModelChoice[]): void {
+    this.data.models = models
     this.save()
   }
 

@@ -1155,6 +1155,37 @@ code {
 .home-footer .project-select {
   min-width: 0;
 }
+.home-footer .model-chip {
+  padding: 4px 10px;
+  font-size: 12.5px;
+}
+.model-chip {
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.menu button.choice {
+  position: relative;
+  padding-left: 26px;
+}
+.menu button.checked::before {
+  content: '✓';
+  position: absolute;
+  left: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--accent);
+}
+.menu-two-line {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.menu-hint {
+  font-size: 12px;
+  color: var(--muted);
+  max-width: 280px;
+  white-space: normal;
+}
 .addon-chip {
   padding: 4px 10px;
   font-size: 12.5px;
@@ -1440,6 +1471,8 @@ textarea.text-input {
   padding: 4px;
   display: flex;
   flex-direction: column;
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
 }
 .menu button {
   text-align: left;
@@ -1859,7 +1892,8 @@ html.remote .project-head {
     gap: 8px;
   }
   .title-project,
-  .status-label {
+  .status-label,
+  .chat-tools .chip-static {
     display: none;
   }
   .size-meter .meter {
@@ -1882,6 +1916,18 @@ html.remote .project-head {
   .text-input,
   .project-select {
     font-size: 16px; /* below 16px, iOS zooms the page on focus */
+  }
+  /* Project on its own row, model and add-on chips under it, so none is squeezed. */
+  .home-footer {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+  .home-footer .project-select {
+    flex: 1 1 100%;
+    max-width: none;
+  }
+  .chip-prefix {
+    display: none;
   }
 
   .home-drag {

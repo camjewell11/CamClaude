@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
+import type { ModelChoice } from '@shared/models'
 import { groupToolRuns } from '@shared/toolGroups'
 import type { ChatItem, ImageAttachment, Project, SessionView, Settings } from '@shared/types'
 import type { View } from '../App'
@@ -10,6 +11,7 @@ import { ArchiveIcon, FolderIcon, HandoffIcon, MoreIcon } from './Icons'
 import { Menu } from './Menu'
 import { MenuButton } from './MenuButton'
 import { Message, ToolGroup } from './Messages'
+import { ModelPicker } from './ModelPicker'
 import { PendingCard } from './PendingCard'
 import { StatusDot } from './Sidebar'
 
@@ -17,6 +19,7 @@ interface Props {
   session: SessionView
   project: Project
   settings: Settings
+  models: ModelChoice[]
   items: ChatItem[] | undefined
   allSessions: SessionView[]
   onSelect: (v: View) => void
@@ -24,7 +27,7 @@ interface Props {
   waiting: number
 }
 
-export function ChatView({ session, project, settings, items, allSessions, onSelect, onMenu, waiting }: Props) {
+export function ChatView({ session, project, settings, models, items, allSessions, onSelect, onMenu, waiting }: Props) {
   const scroller = useRef<HTMLDivElement>(null)
   const pinned = useRef(true)
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
@@ -73,6 +76,18 @@ export function ChatView({ session, project, settings, items, allSessions, onSel
         </div>
         <div className="chat-tools no-drag">
           <span className={`status-label s-${ind}`}>{INDICATOR_LABEL[ind]}</span>
+          <ModelPicker
+            value={session.model ?? ''}
+            projectModel={project.model}
+            activeModel={session.activeModel}
+            models={models}
+            onChange={m => {
+              setError('')
+              cam()
+                .setModel(session.id, m)
+                .catch(err => setError(errorText(err)))
+            }}
+          />
           {session.addons && session.addons.length > 0 && (
             <span className="chip chip-static" title={`Add-ons: ${addonLabels(session.addons)}`}>
               {session.addons.length === 1 ? '1 add-on' : `${session.addons.length} add-ons`}

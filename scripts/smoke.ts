@@ -1,7 +1,8 @@
 // End-to-end smoke test of SessionManager outside Electron, with real Claude calls (about six
 // small requests): one turn in a throwaway project (with a photo attached), a manual handoff, and a
 // check that the successor does not hand off again. The first session picks one add-on
-// (sql-specialist), which the successor must inherit. Run: npm run smoke [-- <scratch dir>]
+// (sql-specialist) and runs on Haiku, then switches to Sonnet before the handoff; the successor must
+// inherit both the add-on and Sonnet. Run: npm run smoke [-- <scratch dir>]
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -45,12 +46,14 @@ const RED_PNG = 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAFklEQVR4nGO4oKB
 const first = mgr.createSession(
   project.id,
   'Reply with exactly the word: pong. Also tell me which environment variable names you were told about, and the color of the attached image in one word. Finally, answer yes or no: is an agent type named sql-specialist:sql-specialist available to you?',
-  { addons: ['sql-specialist'] },
+  { addons: ['sql-specialist'], model: 'haiku' },
   [{ mediaType: 'image/png', data: RED_PNG }],
 )
 
 // Wait for the first turn, then hand off by hand (the growth rule stops an automatic one here).
 while (!(store.session(first.id).status === 'idle' && store.session(first.id).lastRequestTokens > 0)) await new Promise(r => setTimeout(r, 500))
+const firstModel = store.session(first.id).activeModel ?? ''
+console.log(`--- model on the first turn: ${firstModel}; models listed: ${store.models.map((m: { value: string }) => m.value).join(', ')}`)
 
 // Two prompts in quick succession: Claude Code might merge the second into the running turn, so it
 // gets no result of its own. The session must still go idle (session_state_changed 'idle').
@@ -67,6 +70,8 @@ const settledAfterQuickPrompts = store.session(first.id).status === 'idle'
 const merged = logs.some(l => l.includes('merged into earlier turns'))
 console.log(`--- idle after two quick prompts: ${settledAfterQuickPrompts} (second prompt merged: ${merged})`)
 
+// Switch the live process to another model; the handoff turn and the successor run on it.
+await mgr.setModel(first.id, 'sonnet')
 seen.push('MANUAL handoffNow')
 mgr.handoffNow(first.id)
 
@@ -103,7 +108,11 @@ const addonWarnings = [...firstChat, ...(succRec ? await mgr.getChat(succRec.id)
 const sawAddon = firstChat.some((i: { kind: string; text?: string }) => i.kind === 'assistant' && /\byes\b/i.test(i.text ?? ''))
 const addonOk = sawAddon && !addonWarnings.length && JSON.stringify(succRec?.addons) === JSON.stringify(['sql-specialist'])
 console.log(`--- add-on: agent seen ${sawAddon}, warnings ${addonWarnings.length}, successor addons ${JSON.stringify(succRec?.addons)}`)
-const piledUp = !(firstRec.archived && firstRec.archivedReason === 'handoff' && firstRec.successorId) || visible !== 1
+const handoffModel = firstRec.activeModel ?? ''
+const succModel = succRec?.activeModel ?? ''
+const modelOk = /haiku/i.test(firstModel) && /sonnet/i.test(handoffModel) && succRec?.model === 'sonnet' && /sonnet/i.test(succModel) && store.models.length > 0
+console.log(`--- model: first turn ${firstModel}, handoff turn ${handoffModel}, successor asked ${succRec?.model} and ran ${succModel}`)
+const piledUp =!(firstRec.archived && firstRec.archivedReason === 'handoff' && firstRec.successorId) || visible !== 1
 console.log(`--- visible sessions after handoff: ${visible}, first archived: ${firstRec.archived} (${firstRec.archivedReason})`)
 const verdict = !settledAfterQuickPrompts
   ? 'SMOKE FAIL: the session stayed busy after two quick prompts'
@@ -117,6 +126,8 @@ const verdict = !settledAfterQuickPrompts
         ? 'SMOKE FAIL: the attached image did not reach Claude'
         : !addonOk
           ? 'SMOKE FAIL: the add-on did not load or was not inherited'
-          : 'SMOKE OK'
+          : !modelOk
+            ? 'SMOKE FAIL: the model was not applied, switched, or inherited'
+            : 'SMOKE OK'
 console.log(verdict)
 process.exit(verdict === 'SMOKE OK' ? 0 : 1)

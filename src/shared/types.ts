@@ -1,5 +1,7 @@
 // Types shared by the main process (which drives Claude Code) and the renderer (the UI).
 
+import type { ModelChoice } from './models.ts'
+
 export type PermissionModeSetting = 'default' | 'acceptEdits' | 'auto' | 'plan' | 'bypassPermissions'
 
 export interface Project {
@@ -51,6 +53,10 @@ export interface SessionRecord {
   generation: number
   /** Add-on ids (src/shared/addons.ts) this session loads; successors inherit them. */
   addons?: string[]
+  /** Model picked for this session (alias or id); unset uses the project's model. Successors inherit it. */
+  model?: string
+  /** The model id Claude Code last reported for this session's replies. */
+  activeModel?: string
   /** Text waiting in the composer, e.g. a handoff when auto-continue is off. */
   draft?: string
   error?: string
@@ -171,6 +177,8 @@ export interface AppState {
   sessions: SessionView[]
   settings: Settings
   rateLimits: RateWindow[]
+  /** The models Claude Code offers, as it last listed them; empty until a session has started. */
+  models: ModelChoice[]
 }
 
 export interface NewProjectInput {

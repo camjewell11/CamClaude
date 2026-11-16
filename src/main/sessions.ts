@@ -58,6 +58,7 @@ import {
 import type { Store } from './store.ts'
 import type { AddonStore } from './addons.ts'
 import { addonById, cleanAddonIds } from '../shared/addons.ts'
+import { cleanModelChoices, type ModelChoice } from '../shared/models.ts'
 
 const CLIENT_APP = 'camclaude/0.1.0'
 
@@ -253,7 +254,7 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
   createSession(
     projectId: string,
     prompt?: string,
-    extra: Partial<Pick<SessionRecord, 'title' | 'predecessorId' | 'generation' | 'draft' | 'addons'>> = {},
+    extra: Partial<Pick<SessionRecord, 'title' | 'predecessorId' | 'generation' | 'draft' | 'addons' | 'model'>> = {},
     images: readonly ImageAttachment[] = [],
   ): SessionRecord {
     userContent(prompt ?? '', images) // reject a bad image before the session exists
@@ -261,6 +262,7 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
     if (!project) throw new Error('Unknown project')
     const now = Date.now()
     const addons = cleanAddonIds(extra.addons)
+    const model = typeof extra.model === 'string' ? extra.model.trim() : ''
     const rec: SessionRecord = {
       id: randomUUID(),
       projectId,
@@ -277,6 +279,7 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
       predecessorId: extra.predecessorId,
       draft: extra.draft,
       ...(addons.length ? { addons } : {}),
+      ...(model ? { model } : {}),
     }
     this.store.addSession(rec)
     this.chats.set(rec.id, new ChatLog())
@@ -359,6 +362,51 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
 
   unarchive(id: string): void {
     this.patch(id, { archived: false, archivedReason: undefined, lastActivity: Date.now() })
+  }
+
+  /**
+   * Picks the session's model; '' goes back to the project's model. A running Claude Code process
+   * switches from its next request on; otherwise the choice applies when the session next starts.
+   */
+  async setModel(id: string, model: string): Promise<void> {
+    const rec = this.store.session(id)
+    const project = rec && this.store.project(rec.projectId)
+    if (!rec || !project) throw new Error('Unknown session')
+    const chosen = model.trim()
+    const effective = chosen || project.model || undefined
+    const live = this.live.get(id)
+    if (live) await live.q.setModel(effective)
+    // The resolved id, when the list knows it, so the header changes before the next reply.
+    const row = effective ? this.store.models.find(m => m.value === effective) : undefined
+    this.patch(id, { model: chosen || undefined, activeModel: row?.resolvedModel ?? effective })
+  }
+
+  models(): ModelChoice[] {
+    return this.store.models
+  }
+
+  private modelsChecked = false
+
+  /** Asks Claude Code once per app run which models it offers, for the model picker. */
+  private async refreshModels(live: Live): Promise<void> {
+    if (this.modelsChecked) return
+    this.modelsChecked = true
+    try {
+      const rows = cleanModelChoices(await live.q.supportedModels())
+      if (rows.length) {
+        this.store.setModels(rows)
+        this.changed()
+      }
+    } catch (err) {
+      this.modelsChecked = false
+      this.log(`model list failed: ${String(err)}`)
+    }
+  }
+
+  /** Records the model Claude Code reports, which can differ from the one asked for (a fallback). */
+  private noteModel(id: string, model: unknown): void {
+    if (typeof model !== 'string' || !model || model.startsWith('<')) return // '<synthetic>' replies
+    if (this.store.session(id)?.activeModel !== model) this.patch(id, { activeModel: model })
   }
 
   rename(id: string, title: string): void {
@@ -448,7 +496,7 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
       systemPrompt: { type: 'preset', preset: 'claude_code', append: systemAppend(project, Object.keys(env.vars)) },
       permissionMode: project.permissionMode,
       allowDangerouslySkipPermissions: project.permissionMode === 'bypassPermissions',
-      model: project.model || undefined,
+      model: rec.model || project.model || undefined,
       // Only the add-ons this session opted in to; the user's own plugins load from settings as usual.
       ...(plugins.length ? { plugins: plugins.map(path => ({ type: 'local' as const, path })) } : {}),
       pathToClaudeCodeExecutable: claudeBinary(this.store.settings.claudeExecutable),
@@ -494,6 +542,8 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
         if (msg.subtype === 'init') {
           if (!this.store.session(id)?.hasTranscript) this.patch(id, { hasTranscript: true })
           this.checkAddonsLoaded(id, msg.plugins ?? [], msg.plugin_errors ?? [])
+          this.noteModel(id, msg.model)
+          void this.refreshModels(live)
         } else if (msg.subtype === 'compact_boundary') {
           this.notice(id, 'Claude Code compacted the conversation.')
         } else if (msg.subtype === 'session_state_changed') {
@@ -509,6 +559,7 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
       case 'assistant': {
         if (msg.parent_tool_use_id) return // subagent traffic: not shown, not counted
         const size = requestSize((msg.message as { usage?: Parameters<typeof requestSize>[0] }).usage)
+        this.noteModel(id, (msg.message as { model?: unknown }).model)
         const rec = this.store.session(id)
         if (rec && size > 0 && size !== rec.lastRequestTokens) {
           this.patch(id, {
@@ -766,6 +817,7 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
       predecessorId: id,
       generation: rec.generation + 1,
       addons: rec.addons,
+      model: rec.model,
       draft: auto ? undefined : prompt,
     })
     this.notice(id, `Handed off to “${successor.title}”. This session is archived.`)

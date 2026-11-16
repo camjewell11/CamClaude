@@ -16,6 +16,7 @@ import { ChatLog, userContent } from './chatlog.ts'
 import { groupToolRuns, toolNameSummary } from '../shared/toolGroups.ts'
 import { ADDONS, ADDON_SOURCES, addonById, cleanAddonIds } from '../shared/addons.ts'
 import { pluginDirName, pluginManifest, sourceDirName } from './addons.ts'
+import { cleanModelChoices, modelLabel } from '../shared/models.ts'
 
 test('parseEnv handles comments, export, quotes and multi-line values', () => {
   const env = parseEnv(
@@ -222,4 +223,37 @@ test('pluginManifest and folder names carry the add-on id and pinned commit', ()
   assert.equal(manifest.license, 'MIT')
   assert.equal(manifest.repository, 'https://github.com/runxgalee/fullstack-dev')
   assert.ok(manifest.description.includes(commit8))
+})
+
+test('modelLabel shortens model ids and aliases', () => {
+  assert.equal(modelLabel('claude-opus-5-5'), 'Opus 5.5')
+  assert.equal(modelLabel('claude-sonnet-4-5-20250929'), 'Sonnet 4.5')
+  assert.equal(modelLabel('claude-fable-5-2'), 'Fable 5.2')
+  assert.equal(modelLabel('claude-opus-4-20250514'), 'Opus 4')
+  assert.equal(modelLabel('claude-3-5-haiku-20241022'), 'Haiku 3.5')
+  assert.equal(modelLabel('sonnet'), 'Sonnet')
+  assert.equal(modelLabel('opus[1m]'), 'Opus (1M)')
+  assert.equal(modelLabel('claude-opus-5-5[1m]'), 'Opus 5.5 (1M)')
+  assert.equal(modelLabel('some-other-model'), 'some-other-model')
+  assert.equal(modelLabel(''), '')
+  assert.equal(modelLabel(undefined), '')
+  // A listed alias uses Claude Code's display name, without its note.
+  const listed = [{ value: 'opus', displayName: 'Opus 5.5 (1M context)', description: '' }]
+  assert.equal(modelLabel('opus', listed), 'Opus 5.5')
+})
+
+test('cleanModelChoices keeps well-formed rows only', () => {
+  assert.deepEqual(cleanModelChoices(undefined), [])
+  assert.deepEqual(
+    cleanModelChoices([
+      { value: 'sonnet', resolvedModel: 'claude-sonnet-5-5', displayName: 'Sonnet', description: 'Fast', supportsEffort: true },
+      { value: '' },
+      null,
+      { value: 'haiku' },
+    ]),
+    [
+      { value: 'sonnet', resolvedModel: 'claude-sonnet-5-5', displayName: 'Sonnet', description: 'Fast' },
+      { value: 'haiku', displayName: 'haiku', description: '' },
+    ],
+  )
 })

@@ -174,6 +174,7 @@ const state = (): AppState => ({
   sessions: sessions.views(),
   settings: store.settings,
   rateLimits: sessions.rateWindows(),
+  models: sessions.models(),
 })
 
 // ---- remote access ----------------------------------------------------------------------------
@@ -292,8 +293,14 @@ const handlers: Handlers = {
   },
   knownFolders: () => sessions.knownFolders(),
   folderInfo: async path => folderInfo(path),
-  createSession: async (projectId, prompt, images, addons) =>
-    sessions.createSession(projectId, prompt, { addons: Array.isArray(addons) ? addons : [] }, images ?? []).id,
+  createSession: async (projectId, prompt, images, addons, model) =>
+    sessions.createSession(
+      projectId,
+      prompt,
+      { addons: Array.isArray(addons) ? addons : [], model: typeof model === 'string' ? model : undefined },
+      images ?? [],
+    ).id,
+  setModel: (id, model) => sessions.setModel(id, typeof model === 'string' ? model : ''),
   send: (id, text, images) => sessions.send(id, text, images ?? []),
   interrupt: id => sessions.interrupt(id),
   respond: async (id, requestId, response: PendingResponse) => sessions.respond(id, requestId, response),
