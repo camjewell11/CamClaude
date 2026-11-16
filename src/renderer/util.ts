@@ -1,5 +1,5 @@
 import type { CamApi } from '@shared/api'
-import type { SessionStatus, SessionView, Settings } from '@shared/types'
+import type { SessionStatus, SessionView, Settings, UsageTotals } from '@shared/types'
 
 declare global {
   interface Window {
@@ -50,3 +50,32 @@ export function sizeTone(tokens: number, s: Settings): 'ok' | 'warn' | 'over' {
 
 export const errorText = (err: unknown) =>
   String(err instanceof Error ? err.message : err).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
+
+/** A cost in USD, short: $0.42, $15, $1.2k. */
+export function money(usd: number): string {
+  if (usd <= 0) return '$0'
+  if (usd < 0.01) return '<$0.01'
+  if (usd < 10) return `$${usd.toFixed(2)}`
+  if (usd < 1000) return `$${Math.round(usd)}`
+  return `$${(usd / 1000).toFixed(1)}k`
+}
+
+/** A token count, short: 950, 45k, 12.3M, 1.2B. */
+export function tokenCount(n: number): string {
+  if (n >= 1e9) return `${(n / 1e9).toFixed(1)}B`
+  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`
+  if (n >= 1e3) return `${Math.round(n / 1e3)}k`
+  return String(Math.round(n))
+}
+
+/** Every token a total covers: uncached input, output, cache reads, and cache writes. */
+export const allTokens = (t: UsageTotals) => t.input + t.output + t.cacheRead + t.cacheWrite
+
+/** The breakdown, one item per line, for a tooltip. */
+export const usageDetail = (t: UsageTotals) =>
+  [
+    `Input: ${tokenCount(t.input)}`,
+    `Output: ${tokenCount(t.output)}`,
+    `Cache read: ${tokenCount(t.cacheRead)}`,
+    `Cache write: ${tokenCount(t.cacheWrite)}`,
+  ].join('\n')

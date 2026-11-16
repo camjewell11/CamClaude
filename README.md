@@ -29,6 +29,10 @@ running several sessions across projects without watching them all the time.
   (blank uses Claude Code's default). Handoff successors keep the session's model.
 - **Usage guards from quota-guard.** The app refuses a tool call that keeps returning the same
   result (the loop guard), and the sidebar shows your plan's 5-hour and weekly usage.
+- **Token use per project.** Each project in the sidebar shows its all-time cost. Select the usage
+  bars to open the **Usage** view: each project's all-time and weekly cost and tokens, an estimated
+  share of the weekly limit, and each session's totals. Cost is the API list-price equivalent,
+  counted from Claude Code's transcripts, not what a subscription bills.
 
 ## Use it from your phone
 
@@ -114,7 +118,11 @@ npm run smoke      # end to end with real Claude calls (~4 small requests): a tu
   runs can read them. Use project permissions that make you approve commands if that matters.
 - **Usage bars use an experimental SDK call.** If a future SDK removes it, the bars update only
   from rate-limit events near a limit.
-- **Subagent work isn't shown** in the conversation. Only the main thread is.
+- **Subagent work isn't shown** in the conversation. Only the main thread is. (Its tokens do count
+  in the **Usage** view.)
+- **Usage covers this app's sessions only.** Sessions started in a terminal or another app aren't
+  assigned to a project, and the prices are a built-in table (`src/main/usage.ts`) that can go out
+  of date.
 - **No phone notifications.** The phone sees status changes while the page is open, but nothing
   alerts it when the page is closed or the phone is locked; that would need web push over HTTPS.
   On the phone, you also can't browse for folders or open them in Explorer; type paths instead.

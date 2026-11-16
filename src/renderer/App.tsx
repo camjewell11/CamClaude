@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { AppState, ChatItem, ChatUpdate } from '@shared/types'
 import { ChatView } from './components/ChatView'
 import { HomeView } from './components/HomeView'
+import { UsageView } from './components/UsageView'
 import { NewProjectDialog } from './components/NewProjectDialog'
 import { ProjectDialog } from './components/ProjectDialog'
 import { SettingsDialog } from './components/SettingsDialog'
@@ -10,7 +11,7 @@ import { Sidebar } from './components/Sidebar'
 import { hideKeyboard, useBackToClose, useDrawerSwipe, useKeyboardDismiss } from './touch'
 import { cam } from './util'
 
-export type View = { kind: 'home'; projectId?: string } | { kind: 'session'; id: string }
+export type View = { kind: 'home'; projectId?: string } | { kind: 'session'; id: string } | { kind: 'usage' }
 type Dialog = null | { kind: 'newProject' } | { kind: 'project'; id: string } | { kind: 'settings' }
 
 function merge(chats: Record<string, ChatItem[]>, u: ChatUpdate): Record<string, ChatItem[]> {
@@ -174,6 +175,8 @@ export function App() {
             onMenu={openDrawer}
             waiting={waiting}
           />
+        ) : view.kind === 'usage' ? (
+          <UsageView state={state} onSelect={setView} onMenu={openDrawer} waiting={waiting} />
         ) : (
           <HomeView
             state={state}

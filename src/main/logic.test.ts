@@ -17,6 +17,18 @@ import { groupToolRuns, toolNameSummary } from '../shared/toolGroups.ts'
 import { ADDONS, ADDON_SOURCES, addonById, cleanAddonIds } from '../shared/addons.ts'
 import { pluginDirName, pluginManifest, sourceDirName } from './addons.ts'
 import { cleanModelChoices, modelLabel } from '../shared/models.ts'
+import {
+  addEntry,
+  completeLines,
+  emptySessionUsage,
+  emptyTotals,
+  parseUsageLine,
+  priceFor,
+  summarize,
+  usageTotals,
+  UsageLedger,
+  weekStartDay,
+} from './usage.ts'
 
 test('parseEnv handles comments, export, quotes and multi-line values', () => {
   const env = parseEnv(
@@ -256,4 +268,138 @@ test('cleanModelChoices keeps well-formed rows only', () => {
       { value: 'haiku', displayName: 'haiku', description: '' },
     ],
   )
+})
+
+test('priceFor picks the specific version before its family', () => {
+  assert.deepEqual(priceFor('claude-opus-5-5'), { input: 4, output: 20, cacheRead: 0.2 })
+  assert.deepEqual(priceFor('claude-opus-4-8'), { input: 5, output: 25, cacheRead: 0.5 })
+  assert.deepEqual(priceFor('claude-opus-4-1-20250805'), { input: 15, output: 75, cacheRead: 1.5 })
+  assert.deepEqual(priceFor('claude-sonnet-5-5'), { input: 2, output: 10, cacheRead: 0.1 })
+  assert.deepEqual(priceFor('claude-sonnet-5'), { input: 2, output: 10, cacheRead: 0.2 })
+  assert.deepEqual(priceFor('claude-fable-5-2'), { input: 8, output: 40, cacheRead: 0.2 })
+  assert.deepEqual(priceFor('claude-haiku-5-5'), { input: 0.1, output: 0.5, cacheRead: 0.01 })
+  assert.equal(priceFor('gpt-5'), undefined)
+})
+
+test('usageTotals prices cache writes by their lifetime', () => {
+  const t = usageTotals('claude-opus-5-5', {
+    input_tokens: 1_000_000,
+    output_tokens: 1_000_000,
+    cache_read_input_tokens: 1_000_000,
+    cache_creation_input_tokens: 3_000_000,
+    cache_creation: { ephemeral_5m_input_tokens: 2_000_000, ephemeral_1h_input_tokens: 1_000_000 },
+  })
+  // 4 + 20 + 0.2 + 2 × 4 × 1.25 + 1 × 4 × 2
+  assert.equal(t.costUsd.toFixed(4), '42.2000')
+  assert.equal(t.cacheWrite, 3_000_000)
+  // Without a breakdown, every write counts as 5-minute.
+  assert.equal(usageTotals('claude-opus-5-5', { cache_creation_input_tokens: 1_000_000 }).costUsd, 5)
+  assert.equal(usageTotals('unknown', { output_tokens: 10 }).costUsd, 0)
+})
+
+test('parseUsageLine reads assistant lines only', () => {
+  const line = JSON.stringify({
+    type: 'assistant',
+    timestamp: '2026-11-16T10:00:00.000Z',
+    message: { id: 'msg_011Ch6m3ZeYk5WATuBApy98Q', model: 'claude-sonnet-5-5', usage: { input_tokens: 5, output_tokens: 7 } },
+  })
+  const e = parseUsageLine(line)
+  assert.equal(e?.id, 'msg_011Ch6m3ZeYk5WATuBApy98Q')
+  assert.equal(e?.at, Date.parse('2026-11-16T10:00:00.000Z'))
+  assert.equal(e?.totals.output, 7)
+  assert.equal(parseUsageLine(JSON.stringify({ type: 'user', message: { content: '"type":"assistant"' } })), undefined)
+  assert.equal(parseUsageLine('{"type":"assistant", broken'), undefined)
+  assert.equal(
+    parseUsageLine(JSON.stringify({ type: 'assistant', message: { id: 'x', model: '<synthetic>', usage: {} } })),
+    undefined,
+  )
+})
+
+test('completeLines keeps a half-written last line for the next read', () => {
+  const r = completeLines(Buffer.from('a\nb\npartial'))
+  assert.deepEqual(r.lines, ['a', 'b'])
+  assert.equal(r.used, 4)
+  assert.deepEqual(completeLines(Buffer.from('no newline')), { lines: [], used: 0 })
+  // A multi-byte character split across reads stays whole: the cut is always at a newline.
+  const buf = Buffer.from('é\nü')
+  assert.equal(buf.subarray(completeLines(buf).used).toString(), 'ü')
+})
+
+test('addEntry counts each message id once, including far-apart repeats', () => {
+  const s = emptySessionUsage()
+  const seen = new Set<string>()
+  const at = new Date(2026, 10, 16, 12).getTime()
+  const e = (id: string, output: number) => ({ id, at, totals: { ...emptyTotals(), output, costUsd: output } })
+  assert.equal(addEntry(s, seen, e('msg_aaaaaaaaaaaaaaaaaaaaaaa1', 3)), true)
+  assert.equal(addEntry(s, seen, e('msg_aaaaaaaaaaaaaaaaaaaaaaa2', 4)), true)
+  assert.equal(addEntry(s, seen, e('msg_aaaaaaaaaaaaaaaaaaaaaaa1', 3)), false)
+  assert.equal(s.total.output, 7)
+  assert.equal(s.days['2026-11-16'].costUsd, 7)
+  // The saved ids rebuild the set after a restart.
+  assert.equal(addEntry(s, new Set(s.ids), e('msg_aaaaaaaaaaaaaaaaaaaaaaa2', 4)), false)
+})
+
+test('summarize splits the week and sums sessions into projects', () => {
+  const now = new Date(2026, 10, 16, 12).getTime()
+  const day = 86_400_000
+  const s1 = emptySessionUsage()
+  const s2 = emptySessionUsage()
+  const seen = new Set<string>()
+  addEntry(s1, seen, { id: 'old', at: now - 20 * day, totals: { ...emptyTotals(), costUsd: 10 } })
+  addEntry(s1, seen, { id: 'new', at: now, totals: { ...emptyTotals(), costUsd: 1 } })
+  addEntry(s2, new Set(), { id: 'other', at: now - day, totals: { ...emptyTotals(), costUsd: 2 } })
+  const start = weekStartDay([], now)
+  assert.equal(start, '2026-11-10')
+  const sum = summarize({ a: s1, b: s2 }, [
+    { id: 'a', projectId: 'p' },
+    { id: 'b', projectId: 'p' },
+    { id: 'c', projectId: 'q' },
+  ], start, false)
+  assert.equal(sum.sessions.a.total.costUsd, 11)
+  assert.equal(sum.sessions.a.week.costUsd, 1)
+  assert.equal(sum.projects.p.total.costUsd, 13)
+  assert.equal(sum.projects.p.week.costUsd, 3)
+  assert.equal(sum.projects.q.total.costUsd, 0)
+  assert.equal(sum.all.week.costUsd, 3)
+  // The weekly limit window, when known, sets the start.
+  assert.equal(weekStartDay([{ kind: 'seven_day', percentUsed: 10, resetsAt: now + 2 * day }], now), '2026-11-11')
+})
+
+test('UsageLedger reads only new lines, finds subagents, and survives a restart', async () => {
+  const { mkdtempSync, mkdirSync, appendFileSync, writeFileSync, rmSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const root = mkdtempSync(join(tmpdir(), 'camclaude-usage-'))
+  try {
+    const projects = join(root, 'projects')
+    const dir = join(projects, 'c--Work')
+    mkdirSync(join(dir, 'sid', 'subagents'), { recursive: true })
+    const line = (id: string, output: number) =>
+      JSON.stringify({ type: 'assistant', timestamp: '2026-11-16T10:00:00Z', message: { id, model: 'claude-opus-5-5', usage: { output_tokens: output } } }) + '\n'
+    const main = join(dir, 'sid.jsonl')
+    writeFileSync(main, line('msg_000000000001', 10) + line('msg_000000000001', 10) + '{"type":"user"}\n')
+    writeFileSync(join(dir, 'sid', 'subagents', 'agent-a.jsonl'), line('msg_000000000002', 5))
+    const file = join(root, 'usage.json')
+    const ledger = new UsageLedger(file, projects)
+    assert.equal(await ledger.scan('sid'), true)
+    assert.equal(ledger.sessions.sid.total.output, 15)
+    // A half-written line waits; once complete, it counts once.
+    const half = line('msg_000000000003', 1)
+    appendFileSync(main, half.slice(0, 20))
+    assert.equal(await ledger.scan('sid'), false)
+    appendFileSync(main, half.slice(20) + line('msg_000000000001', 10))
+    assert.equal(await ledger.scan('sid'), true)
+    assert.equal(ledger.sessions.sid.total.output, 16)
+    ledger.save()
+    ledger.flush()
+    const again = new UsageLedger(file, projects)
+    assert.equal(again.sessions.sid.total.output, 16)
+    appendFileSync(main, line('msg_000000000004', 4))
+    assert.equal(await again.scan('sid'), true)
+    assert.equal(again.sessions.sid.total.output, 20)
+    assert.equal(await again.scan('missing'), false)
+    again.flush() // no write left pending after the folder is gone
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
 })

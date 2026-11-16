@@ -11,6 +11,7 @@ import { AddonStore } from './addons.ts'
 import { newToken, RemoteServer } from './remote.ts'
 import { SessionManager } from './sessions.ts'
 import { Store } from './store.ts'
+import { claudeProjectsDir, summarize, UsageLedger, weekStartDay } from './usage.ts'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const rendererDir = join(here, '../renderer')
@@ -34,6 +35,7 @@ const log = (line: string) => {
 
 const store = new Store(userData, '')
 const sessions = new SessionManager(store, join(userData, 'handoffs'), log, new AddonStore(join(userData, 'addons'), log))
+const usage = new UsageLedger(join(userData, 'usage.json'), claudeProjectsDir(), log)
 let win: BrowserWindow | null = null
 let tray: Tray | null = null
 let quitting = false
@@ -175,7 +177,28 @@ const state = (): AppState => ({
   settings: store.settings,
   rateLimits: sessions.rateWindows(),
   models: sessions.models(),
+  usage: summarize(usage.sessions, store.sessions, weekStartDay(sessions.rateWindows()), usage.scanning),
 })
+
+/** Pushes state at most every half second while the startup scan counts old transcripts. */
+let usagePushTimer: NodeJS.Timeout | undefined
+function usageChanged(): void {
+  if (usagePushTimer) return
+  usagePushTimer = setTimeout(() => {
+    usagePushTimer = undefined
+    send('state', state())
+  }, 500)
+}
+
+/** Counts every known session's transcripts once, most recent first; turn ends keep it current. */
+async function startUsage(): Promise<void> {
+  usage.prune(new Set(store.sessions.map(s => s.id)))
+  const ids = store.sessions
+    .filter(s => s.hasTranscript)
+    .sort((a, b) => b.lastActivity - a.lastActivity)
+    .map(s => s.id)
+  await usage.scanAll(ids, usageChanged)
+}
 
 // ---- remote access ----------------------------------------------------------------------------
 
@@ -199,6 +222,12 @@ async function applyRemote(): Promise<void> {
 }
 
 sessions.on('state', () => send('state', state()))
+sessions.on('turnEnd', id => {
+  usage.scan(id).then(
+    counted => counted && usageChanged(),
+    err => log(`usage scan of ${id} failed: ${String(err)}`),
+  )
+})
 sessions.on('chat', u => send('chat', u))
 sessions.on('handoff', h => send('handoff', h))
 sessions.on('attention', a => {
@@ -372,6 +401,7 @@ app.whenReady().then(() => {
   sessions.startJanitor()
   void defaultProjectsRoot()
   void applyRemote()
+  setTimeout(() => void startUsage(), 2000) // after the window is up
   log(`started; data in ${userData}; ${basename(process.execPath)}`)
 })
 
@@ -380,6 +410,7 @@ app.on('before-quit', () => {
   sessions.stopAll()
   void remote.stop()
   store.flush()
+  usage.flush()
 })
 
 app.on('window-all-closed', () => {

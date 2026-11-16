@@ -130,6 +130,8 @@ export interface SessionManagerEvents {
   chat: [ChatUpdate]
   handoff: [{ from: string; to: string }]
   attention: [Attention]
+  /** A turn ended, so the session's transcript has new replies to count. */
+  turnEnd: [string]
 }
 
 export class SessionManager extends EventEmitter<SessionManagerEvents> {
@@ -608,6 +610,7 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
     live.turnsQueued = Math.max(0, live.turnsQueued - 1)
     const rec = this.store.session(id)
     if (!rec) return
+    this.emit('turnEnd', id)
 
     if (msg.subtype !== 'success') {
       const errors = 'errors' in msg && Array.isArray(msg.errors) ? msg.errors.join('; ') : ''

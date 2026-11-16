@@ -487,6 +487,32 @@ code {
   font-size: 11.5px;
   color: var(--faint);
 }
+/* The usage bars open the Usage view. */
+.usage-open {
+  display: block;
+  width: 100%;
+  text-align: left;
+  margin: -4px -6px;
+  padding: 4px 6px;
+  box-sizing: content-box;
+  border-radius: 6px;
+}
+.usage-open:hover,
+.usage-open.selected {
+  background: var(--hover);
+}
+
+/* A project's all-time cost, after its name in the sidebar. */
+.project-cost {
+  flex: none;
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
 
 .meter {
   display: block;
@@ -1470,6 +1496,156 @@ textarea.text-input {
 /* A long folder path wraps instead of widening the page on a phone. */
 .home-hint code {
   overflow-wrap: anywhere;
+}
+
+/* usage view */
+.usage-view {
+  overflow-y: auto;
+}
+.usage-inner {
+  width: 100%;
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 8px 24px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.usage-title {
+  font-family: var(--font-reply);
+  font-weight: 400;
+  font-size: 30px;
+  margin: 0;
+  color: var(--text-2);
+}
+.usage-note {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.usage-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.usage-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.tile-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+.tile-value {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.tile-sub {
+  font-size: 11.5px;
+  color: var(--faint);
+}
+.usage-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.usage-table th,
+.usage-table td {
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  font-weight: 400;
+}
+.usage-table thead th {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.usage-table thead th:not(:first-child),
+.usage-table .num {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.usage-table .num > span {
+  display: block;
+}
+.usage-tokens {
+  font-size: 11px;
+  color: var(--faint);
+}
+.usage-expand,
+.usage-session-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+  color: var(--text);
+}
+.usage-expand {
+  font-weight: 600;
+}
+.usage-expand:disabled .chev {
+  visibility: hidden;
+}
+.usage-count {
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--faint);
+}
+.usage-session th {
+  padding-left: 28px;
+  max-width: 0; /* lets the title ellipsize instead of widening the table */
+  width: 50%;
+}
+.usage-session-link {
+  color: var(--text-2);
+}
+.usage-icon-gap {
+  flex: none;
+  width: 12px;
+}
+.usage-session-link span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.usage-session-link:hover span {
+  text-decoration: underline;
+}
+.usage-none {
+  color: var(--faint);
+  text-align: center;
+}
+@media (max-width: 760px) {
+  .usage-inner {
+    padding: 8px 12px 32px;
+  }
+  .usage-tiles {
+    gap: 6px;
+  }
+  .usage-tile {
+    padding: 8px 10px;
+  }
+  .tile-value {
+    font-size: 17px;
+  }
+  .usage-table thead th:last-child,
+  .usage-table td:last-child,
+  .usage-share-note {
+    display: none; /* the estimate column doesn't fit a phone */
+  }
 }
 
 /* menus and modals */

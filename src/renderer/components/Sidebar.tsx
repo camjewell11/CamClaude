@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 
-import type { AppState, Project, RateWindow, SessionView } from '@shared/types'
+import type { AppState, Project, RateWindow, SessionView, UsageRow } from '@shared/types'
 import type { View } from '../App'
-import { ago, cam, clock, indicator, INDICATOR_LABEL, type Indicator } from '../util'
+import { ago, cam, clock, indicator, INDICATOR_LABEL, money, type Indicator } from '../util'
 import { ArchiveIcon, ChevronIcon, GearIcon, MoreIcon, PlusIcon } from './Icons'
 import { Menu, type MenuItem } from './Menu'
 import { useLongPress } from '../touch'
@@ -111,6 +111,7 @@ export function Sidebar({ state, view, onSelect, onNewSession, onNewProject, onP
               .filter(s => s.projectId === p.id && visible(s))
               .sort((a, b) => Number(a.archived) - Number(b.archived) || b.lastActivity - a.lastActivity)}
             allForProject={state.sessions.filter(s => s.projectId === p.id && !s.archived)}
+            usage={state.usage?.projects[p.id]}
             filtered={filter !== 'all'}
             selectedId={selectedId}
             now={now}
@@ -122,7 +123,13 @@ export function Sidebar({ state, view, onSelect, onNewSession, onNewProject, onP
       </nav>
 
       <div className="sidebar-foot">
-        <UsageBars windows={state.rateLimits} />
+        <button
+          className={`usage-open ${view.kind === 'usage' ? 'selected' : ''}`}
+          onClick={() => onSelect({ kind: 'usage' })}
+          title="Show usage by project"
+        >
+          <UsageBars windows={state.rateLimits} />
+        </button>
         <div className="foot-row">
           <label className="toggle">
             <input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} />
@@ -141,6 +148,7 @@ function ProjectGroup(props: {
   project: Project
   sessions: SessionView[]
   allForProject: SessionView[]
+  usage?: UsageRow
   filtered: boolean
   selectedId?: string
   now: number
@@ -187,6 +195,14 @@ function ProjectGroup(props: {
           )}
           {collapsed && waiting > 0 && <StatusDot value="needs-input" title={`${waiting} need your input`} />}
           {collapsed && working > 0 && <StatusDot value="running" title={`${working} working`} />}
+          {props.usage && props.usage.total.costUsd > 0 && (
+            <span
+              className="project-cost"
+              title={`${money(props.usage.total.costUsd)} all time, ${money(props.usage.week.costUsd)} this week (API list price)`}
+            >
+              {money(props.usage.total.costUsd)}
+            </span>
+          )}
         </button>
         <span className="project-tools">
           <button className="icon-button small" onClick={props.onNewSession} title="New session in this project" aria-label="New session">

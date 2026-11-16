@@ -172,6 +172,34 @@ export interface SessionView extends SessionRecord {
   pending: PendingRequest[]
 }
 
+/** Tokens and their API list-price cost; not what a subscription bills. */
+export interface UsageTotals {
+  /** Uncached input tokens. */
+  input: number
+  output: number
+  cacheRead: number
+  cacheWrite: number
+  costUsd: number
+}
+
+export interface UsageRow {
+  total: UsageTotals
+  /** Since `UsageSummary.weekStart`. */
+  week: UsageTotals
+}
+
+/** Token use counted from Claude Code's transcripts, for the sessions this app knows. */
+export interface UsageSummary {
+  projects: Record<string, UsageRow>
+  sessions: Record<string, UsageRow>
+  /** Every project together. */
+  all: UsageRow
+  /** First local day (YYYY-MM-DD) counted in `week`: the weekly limit window's start, or 7 days back. */
+  weekStart: string
+  /** True while the startup scan is still reading transcripts. */
+  scanning: boolean
+}
+
 export interface AppState {
   projects: Project[]
   sessions: SessionView[]
@@ -179,6 +207,7 @@ export interface AppState {
   rateLimits: RateWindow[]
   /** The models Claude Code offers, as it last listed them; empty until a session has started. */
   models: ModelChoice[]
+  usage: UsageSummary
 }
 
 export interface NewProjectInput {
