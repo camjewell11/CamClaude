@@ -1,5 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
+import { groupToolRuns } from '@shared/toolGroups'
 import type { ChatItem, ImageAttachment, Project, SessionView, Settings } from '@shared/types'
 import type { View } from '../App'
 import { cam, errorText, indicator, INDICATOR_LABEL, kTokens, sizeTone } from '../util'
@@ -7,7 +8,7 @@ import { Composer } from './Composer'
 import { ArchiveIcon, FolderIcon, HandoffIcon, MoreIcon } from './Icons'
 import { Menu } from './Menu'
 import { MenuButton } from './MenuButton'
-import { Message } from './Messages'
+import { Message, ToolGroup } from './Messages'
 import { PendingCard } from './PendingCard'
 import { StatusDot } from './Sidebar'
 
@@ -32,6 +33,7 @@ export function ChatView({ session, project, settings, items, allSessions, onSel
   const ind = indicator(session)
   const successor = session.successorId ? allSessions.find(s => s.id === session.successorId) : undefined
   const predecessor = session.predecessorId ? allSessions.find(s => s.id === session.predecessorId) : undefined
+  const entries = useMemo(() => items && groupToolRuns(items), [items])
 
   // Stay at the bottom while new messages arrive, unless you scrolled up to read.
   useLayoutEffect(() => {
@@ -126,7 +128,9 @@ export function ChatView({ session, project, settings, items, allSessions, onSel
               <FolderIcon size={18} /> {project.folder}
             </div>
           )}
-          {items?.map(item => <Message key={item.id} item={item} />)}
+          {entries?.map(e =>
+            e.kind === 'tools' ? <ToolGroup key={e.id} tools={e.tools} /> : <Message key={e.item.id} item={e.item} />,
+          )}
           {session.status === 'running' && session.pending.length === 0 && <div className="thinking" aria-label="Claude is working" />}
           {successor && (
             <button className="chain-link next" onClick={() => onSelect({ kind: 'session', id: successor.id })}>

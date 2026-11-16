@@ -3,6 +3,7 @@ import Markdown from 'react-markdown'
 import { createPortal } from 'react-dom'
 import remarkGfm from 'remark-gfm'
 
+import { toolNameSummary, type ToolItem } from '@shared/toolGroups'
 import type { ChatItem } from '@shared/types'
 import { useBackToClose } from '../touch'
 import { ChevronIcon, HandoffIcon, NoteIcon, ToolIcon } from './Icons'
@@ -92,7 +93,39 @@ function HandoffMessage({ text }: { text: string }) {
   )
 }
 
-function ToolRow({ item }: { item: Extract<ChatItem, { kind: 'tool' }> }) {
+/**
+ * Two or more adjacent tool calls as one row. Collapsed, it shows the count and the tool names,
+ * or the latest call while one is still running. Expanded, it lists the usual tool cards.
+ */
+export function ToolGroup({ tools }: { tools: ToolItem[] }) {
+  const [open, setOpen] = useState(false)
+  const last = tools[tools.length - 1]
+  const running = last.result === undefined
+  const failed = tools.filter(t => t.isError).length
+  return (
+    <div className={`msg-tool tool-group ${failed ? 'has-error' : ''} ${open ? 'open' : ''}`}>
+      <button className="tool-head group-head" onClick={() => setOpen(o => !o)} aria-expanded={open}>
+        <ToolIcon size={13} />
+        <span className="tool-name">{tools.length} tool calls</span>
+        <span className={`tool-summary ${running ? '' : 'names'}`}>
+          {running ? `${last.name} ${last.summary}` : toolNameSummary(tools)}
+        </span>
+        {failed > 0 && <span className="group-failed">{failed} failed</span>}
+        {running && <span className="tool-spinner" aria-label="Running" />}
+        <ChevronIcon size={13} className={`chev ${open ? 'open' : ''}`} />
+      </button>
+      {open && (
+        <div className="group-body">
+          {tools.map(t => (
+            <Message key={t.id} item={t} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ToolRow({ item }: { item: ToolItem }) {
   const [open, setOpen] = useState(false)
   const pending = item.result === undefined
   return (

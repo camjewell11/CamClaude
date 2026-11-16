@@ -123,16 +123,24 @@ export const isHandoffText = (text: string): boolean => /^#{1,4}\s*next\s+steps?
  * Whether text is quota-guard stopping the session for size: it halted tool calls for the rest of
  * the turn, or dropped a prompt. quota-guard loads in CamClaude sessions too, and its limit can be
  * lower than this app's handoff limit; without this, a halted session sits idle with no handoff.
+ *
+ * The notice must open the text: its first line, after at most a short prefix such as
+ * `<tool_use_error>` or a "dropped by a hook" label. A file or command output that only quotes the
+ * phrase (this app's own docs and tests do) must not stop the session.
  */
 export const isQuotaGuardStop = (text: string): boolean =>
-  /quota-guard: (tool calls are halted\b|this session re-sends \d+k tokens)/.test(text)
+  /^[^\n]{0,80}?quota-guard: (?:tool calls are halted\b|this session re-sends \d+k tokens)/.test(text.trimStart())
 
-/** The text of every tool_result block in a user message's content. */
-export function toolResultTexts(content: unknown): string[] {
+/**
+ * The text of every tool_result block in a user message's content. With errorsOnly, only blocks
+ * marked is_error, which is what a hook's deny produces.
+ */
+export function toolResultTexts(content: unknown, opts: { errorsOnly?: boolean } = {}): string[] {
   if (!Array.isArray(content)) return []
   const out: string[] = []
-  for (const block of content as { type?: unknown; content?: unknown }[]) {
+  for (const block of content as { type?: unknown; content?: unknown; is_error?: unknown }[]) {
     if (block?.type !== 'tool_result') continue
+    if (opts.errorsOnly && block.is_error !== true) continue
     if (typeof block.content === 'string') out.push(block.content)
     else if (Array.isArray(block.content)) {
       for (const part of block.content as { type?: unknown; text?: unknown }[]) {
@@ -159,10 +167,21 @@ export function successorPrompt(handoff: string, predecessorTitle: string, hando
   ].join('\n')
 }
 
-export const HARD_STOP_MESSAGE = (tokens: number) =>
-  `CamClaude stopped this tool call: each request in this session now re-sends ${kTokens(tokens)} ` +
-  `tokens, past the size limit. Don't call more tools. End your turn now with one or two ` +
-  `sentences on where things stand; the app will write a handoff and continue in a fresh session.`
+/** Why a session is in the stopping phase: over the hard stop, quota-guard, or Hand off now. */
+export type StopReason = 'size' | 'quota-guard' | 'user'
+
+export function HARD_STOP_MESSAGE(reason: StopReason, tokens: number): string {
+  const cause =
+    reason === 'user'
+      ? 'the user asked for a handoff'
+      : reason === 'quota-guard'
+        ? `quota-guard stopped this session for size (each request re-sends ${kTokens(tokens)} tokens)`
+        : `each request in this session now re-sends ${kTokens(tokens)} tokens, past the size limit`
+  return (
+    `CamClaude stopped this tool call: ${cause}. Don't call more tools. End your turn now with one ` +
+    `or two sentences on where things stand; the app will write a handoff and continue in a fresh session.`
+  )
+}
 
 export const HANDOFF_TOOL_MESSAGE =
   'CamClaude: while writing the handoff only Read, Grep and Glob work. Reply with the handoff document.'

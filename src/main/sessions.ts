@@ -43,6 +43,7 @@ import {
   HANDOFF_TOOL_MESSAGE,
   HANDOFF_TOOLS,
   HARD_STOP_MESSAGE,
+  type StopReason,
   LoopTracker,
   handoffRequest,
   pickHandoff,
@@ -97,6 +98,8 @@ interface Live {
   pending: Map<string, { req: PendingRequest; resolve: (r: PendingResponse) => void }>
   loops: LoopTracker
   phase: Phase
+  /** Why phase is 'stopping'; read only in that phase. */
+  stopReason?: StopReason
   /** Prompts sent whose turn has not finished yet. */
   turnsQueued: number
   lastAssistantText: string
@@ -486,7 +489,7 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
         if (msg.parent_tool_use_id) return
         // Tool results; the person's own prompts were added when sent (same uuid, so no duplicate).
         this.emitChat(id, this.chat(id).apply('user', msg.uuid ?? randomUUID(), msg.message))
-        if (toolResultTexts(msg.message.content).some(isQuotaGuardStop)) this.onQuotaGuardStop(id, live)
+        if (toolResultTexts(msg.message.content, { errorsOnly: true }).some(isQuotaGuardStop)) this.onQuotaGuardStop(id, live)
         return
       }
       case 'rate_limit_event': {
@@ -545,6 +548,7 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
   private onQuotaGuardStop(id: string, live: Live): void {
     if (live.phase !== 'normal' || this.store.session(id)?.archived) return
     live.phase = 'stopping'
+    live.stopReason = 'quota-guard'
     this.log(`[${id.slice(0, 8)}] quota-guard stopped the session; handing off at turn end`)
     this.notice(id, 'quota-guard stopped this session for size. Handing off when this turn ends.', 'warn')
   }
@@ -663,6 +667,7 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
     if (!rec || rec.archived) return
     if (live && (live.turnsQueued > 0 || live.pending.size > 0)) {
       live.phase = 'stopping' // hand off when the current turn ends
+      live.stopReason = 'user'
       this.notice(id, 'Will hand off when this turn ends.')
       return
     }
@@ -821,9 +826,10 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
         isOverLimit(rec.lastRequestTokens, rec.baselineTokens ?? 0, this.store.settings.hardStopTokens)
       ) {
         live.phase = 'stopping'
+        live.stopReason = 'size'
         this.notice(id, `Past ${kTokens(this.store.settings.hardStopTokens)} tokens per request. Ending this turn so the session can hand off.`, 'warn')
       }
-      if (isMain && live.phase === 'stopping') return deny(HARD_STOP_MESSAGE(rec?.lastRequestTokens ?? 0))
+      if (isMain && live.phase === 'stopping') return deny(HARD_STOP_MESSAGE(live.stopReason ?? 'size', rec?.lastRequestTokens ?? 0))
 
       const refusal = live.loops.before(input.agent_id ?? 'main', input.tool_use_id, input.tool_name, input.tool_input)
       if (refusal) {

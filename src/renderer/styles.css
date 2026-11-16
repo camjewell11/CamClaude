@@ -839,6 +839,27 @@ code {
   color: var(--s-error);
 }
 
+/* Adjacent tool calls, folded into one row until opened. */
+.tool-summary.names {
+  font-family: inherit;
+  font-size: 12.5px;
+}
+.group-failed {
+  flex: none;
+  font-size: 12px;
+  color: var(--s-error);
+}
+.group-body {
+  border-top: 1px solid var(--border);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tool-group.has-error {
+  border-color: color-mix(in srgb, var(--s-error) 45%, var(--border));
+}
+
 .tool-spinner {
   flex: none;
   width: 12px;
@@ -1825,6 +1846,9 @@ html.remote .project-head {
   .project-tools,
   .codeblock .copy {
     opacity: 1;
+  }
+  .tool-head {
+    min-height: 44px;
   }
 }
 

@@ -13,6 +13,7 @@ import {
   toolResultTexts,
 } from './guard.ts'
 import { ChatLog, userContent } from './chatlog.ts'
+import { groupToolRuns, toolNameSummary } from '../shared/toolGroups.ts'
 
 test('parseEnv handles comments, export, quotes and multi-line values', () => {
   const env = parseEnv(
@@ -112,31 +113,59 @@ test('userContent puts images before the text and rejects bad ones', () => {
   assert.ok(item?.kind === 'user' && item.images?.[0] === 'data:image/jpeg;base64,AAAA')
 })
 
+// quota-guard's notices, built from parts so that reading this file doesn't stop a CamClaude
+// session (isQuotaGuardStop used to match any tool result that quoted them).
+const QG = 'quota-guard' + ': '
+const HALT = QG + 'tool calls are ' + 'halted for the rest of this turn because the session is over its size limit.'
+const DROP = 'Prompt dropped by a hook: ' + QG + 'this session ' + 're-sends 159k tokens with every request.'
+
 test('pickHandoff skips hook notices and takes a reply with a Next step section', () => {
-  const drop =
-    'Prompt dropped by a hook: quota-guard: this session re-sends 159k tokens with every request.'
   const real = '## Task\n\nFix it.\n\n## Next step\n\nRun the tests.'
-  assert.equal(isHandoffText(drop), false)
+  assert.equal(isHandoffText(DROP), false)
   assert.equal(isHandoffText(real), true)
   assert.equal(isHandoffText('### Next steps\n1. Go'), true)
   assert.equal(isHandoffText('The next step is to run it.'), false)
-  assert.equal(pickHandoff([drop, real]), real)
-  assert.equal(pickHandoff([drop, '']), undefined)
+  assert.equal(pickHandoff([DROP, real]), real)
+  assert.equal(pickHandoff([DROP, '']), undefined)
 })
 
 test('isQuotaGuardStop spots a halt in tool results and a dropped prompt', () => {
-  const halt =
-    'quota-guard: tool calls are halted for the rest of this turn because the session is over its size limit.'
-  const drop = 'Prompt dropped by a hook: quota-guard: this session re-sends 159k tokens with every request.'
   const content = [
     { type: 'tool_result', tool_use_id: 't1', content: 'ok' },
-    { type: 'tool_result', tool_use_id: 't2', is_error: true, content: [{ type: 'text', text: `<tool_use_error>${halt}</tool_use_error>` }] },
-    { type: 'text', text: halt },
+    { type: 'tool_result', tool_use_id: 't2', is_error: true, content: [{ type: 'text', text: `<tool_use_error>${HALT}</tool_use_error>` }] },
+    { type: 'text', text: HALT },
   ]
-  assert.deepEqual(toolResultTexts(content), ['ok', `<tool_use_error>${halt}</tool_use_error>`])
+  assert.deepEqual(toolResultTexts(content), ['ok', `<tool_use_error>${HALT}</tool_use_error>`])
+  assert.deepEqual(toolResultTexts(content, { errorsOnly: true }), [`<tool_use_error>${HALT}</tool_use_error>`])
   assert.deepEqual(toolResultTexts('a prompt'), [])
-  assert.equal(toolResultTexts(content).some(isQuotaGuardStop), true)
-  assert.equal(isQuotaGuardStop(drop), true)
-  assert.equal(isQuotaGuardStop('quota-guard: 87% of your five-hour limit is used.'), false)
+  assert.equal(toolResultTexts(content, { errorsOnly: true }).some(isQuotaGuardStop), true)
+  assert.equal(isQuotaGuardStop(DROP), true)
+  assert.equal(isQuotaGuardStop(QG + '87% of your five-hour limit is used.'), false)
   assert.equal(isQuotaGuardStop('Tests passed.'), false)
+})
+
+test('isQuotaGuardStop ignores files and output that only quote the notice', () => {
+  // A Read of a doc that quotes the halt: a successful result, with the phrase mid-file.
+  const read = `40\tSome notes.\n43\tquota-guard prints "${HALT}" when it halts.\n`
+  const content = [{ type: 'tool_result', tool_use_id: 't1', is_error: false, content: [{ type: 'text', text: read }] }]
+  assert.deepEqual(toolResultTexts(content, { errorsOnly: true }), [])
+  assert.equal(isQuotaGuardStop(read), false)
+  // A failed command whose output quotes the phrase later on doesn't count either.
+  assert.equal(isQuotaGuardStop(`Exit code 1\nsrc/a.ts:3: ${HALT}`), false)
+  // An assistant reply that explains the notice mid-sentence isn't a dropped prompt.
+  assert.equal(isQuotaGuardStop(`When the session is too big, quota-guard prints a notice like this one: ${DROP}`), false)
+})
+
+test('groupToolRuns folds adjacent tool calls and keeps lone ones as cards', () => {
+  const tool = (id: string, name: string) => ({ kind: 'tool' as const, id, name, summary: '', input: {} })
+  const text = (id: string) => ({ kind: 'assistant' as const, id, text: 'hi' })
+  const out = groupToolRuns([tool('a', 'Bash'), tool('b', 'Bash'), tool('c', 'Read'), text('t'), tool('d', 'Edit')])
+  assert.deepEqual(
+    out.map(e => (e.kind === 'tools' ? `group:${e.id}:${e.tools.length}` : `item:${e.item.id}`)),
+    ['group:a:3', 'item:t', 'item:d'],
+  )
+  const first = out[0]
+  assert.ok(first.kind === 'tools')
+  assert.equal(toolNameSummary(first.tools), 'Bash ×2, Read')
+  assert.deepEqual(groupToolRuns([]), [])
 })
