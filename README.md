@@ -30,8 +30,8 @@ running several sessions across projects without watching them all the time.
 - **Effort per session.** The **Effort** chip next to the model sets how much Claude thinks: Low,
   Medium, High, Extra high, or Max, or **Default** for Claude Code's default for the model. It lists
   only the levels the model offers. A running session changes from its next request, and handoff
-  successors keep the level. On phones, set it on the new-session page; the chat header shows the
-  chip only when a level is set.
+  successors keep the level. On phones, the chat header's model chip menu
+  lists the effort levels too.
 - **Usage guards from quota-guard.** The app refuses a tool call that keeps returning the same
   result (the loop guard), and the sidebar shows your plan's 5-hour and weekly usage.
 - **Token use per project.** Each project in the sidebar shows its all-time cost. Select the usage

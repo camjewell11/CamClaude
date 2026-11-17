@@ -10,6 +10,8 @@ export interface MenuItem {
   checked?: boolean
   /** A second, quieter line under the label. */
   hint?: string
+  /** A heading shown above this item, to start a group. */
+  section?: string
 }
 
 /** A small context menu at a screen point; closes on outside click, Escape, or a choice. */
@@ -45,7 +47,12 @@ export function Menu({ at, items, onClose }: { at: { x: number; y: number }; ite
 
   return createPortal(
     <div ref={ref} className="menu" role="menu" style={{ left: pos.x, top: pos.y }}>
-      {items.map((item, i) => (
+      {items.map((item, i) => [
+        item.section && (
+          <div key={`${i}:section`} className="menu-section" role="presentation">
+            {item.section}
+          </div>
+        ),
         <button
           key={`${i}:${item.label}`}
           role={item.checked === undefined ? 'menuitem' : 'menuitemradio'}
@@ -65,8 +72,8 @@ export function Menu({ at, items, onClose }: { at: { x: number; y: number }; ite
           ) : (
             item.label
           )}
-        </button>
-      ))}
+        </button>,
+      ])}
     </div>,
     document.body,
   )

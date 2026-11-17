@@ -1,7 +1,9 @@
 import { useState } from 'react'
 
+import { effortLabel, type EffortLevel } from '@shared/effort'
 import { FALLBACK_MODELS, isDefaultChoice, modelLabel, type ModelChoice } from '@shared/models'
-import { Menu } from './Menu'
+import { effortMenuItems } from './EffortPicker'
+import { Menu, type MenuItem } from './Menu'
 
 interface Props {
   /** The session's own choice; '' follows the project's model. */
@@ -15,11 +17,19 @@ interface Props {
   /** Text before the model name, as in "Model · Sonnet". */
   prefix?: string
   disabled?: boolean
+  /**
+   * On a phone, the effort choices join this menu (the chat header has no room for a second chip,
+   * so CSS hides the EffortPicker there). `model` is the model the session runs or will run.
+   */
+  effort?: { value: EffortLevel | undefined; model?: string; onChange: (effort: EffortLevel | undefined) => void }
 }
 
+/** Matches the phone layout in styles.css. */
+const narrow = () => window.matchMedia('(max-width: 760px)').matches
+
 /** A chip that shows a model and opens a menu to pick another. */
-export function ModelPicker({ value, projectModel, activeModel, models, onChange, prefix, disabled }: Props) {
-  const [at, setAt] = useState<{ x: number; y: number } | null>(null)
+export function ModelPicker({ value, projectModel, activeModel, models, onChange, prefix, disabled, effort }: Props) {
+  const [at, setAt] = useState<{ at: { x: number; y: number }; withEffort: boolean } | null>(null)
   const listed = models.length ? models : FALLBACK_MODELS
   const choices = listed.filter(m => !isDefaultChoice(m))
   const claudeDefault = listed.find(isDefaultChoice)?.resolvedModel
@@ -41,18 +51,26 @@ export function ModelPicker({ value, projectModel, activeModel, models, onChange
         aria-label={`Model: ${shown}. Change model`}
         onClick={e => {
           const r = e.currentTarget.getBoundingClientRect()
-          setAt({ x: r.left, y: r.bottom + 4 })
+          setAt({ at: { x: r.left, y: r.bottom + 4 }, withEffort: !!effort && narrow() })
         }}
       >
         {prefix && <span className="chip-prefix">{prefix} ·</span>}
         {shown}
+        {effort?.value && <span className="narrow-only"> · {effortLabel(effort.value)}</span>}
       </button>
       {at && (
         <Menu
-          at={at}
+          at={at.at}
           onClose={() => setAt(null)}
           items={[
-            { label: `Project default (${projectLabel})`, checked: !value, onClick: () => onChange('') },
+            // Effort first: its few choices stay in view above the long model list.
+            ...(at.withEffort && effort ? withSection(effortMenuItems(effort.value, effort.model, models, effort.onChange), 'Effort') : []),
+            {
+              label: `Project default (${projectLabel})`,
+              checked: !value,
+              onClick: () => onChange(''),
+              section: at.withEffort ? 'Model' : undefined,
+            },
             ...choices.map(m => ({
               label: modelLabel(m.value, choices),
               // Aliases (opus, sonnet, ...) track the latest version; pinned older ids stay one line.
@@ -66,3 +84,6 @@ export function ModelPicker({ value, projectModel, activeModel, models, onChange
     </>
   )
 }
+
+const withSection = (items: MenuItem[], section: string): MenuItem[] =>
+  items.map((item, i) => (i === 0 ? { ...item, section } : item))

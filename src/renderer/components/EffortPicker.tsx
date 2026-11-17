@@ -2,7 +2,7 @@ import { useState } from 'react'
 
 import { EFFORT_LEVELS, effortLabel, effortLevelsFor, type EffortLevel } from '@shared/effort'
 import type { ModelChoice } from '@shared/models'
-import { Menu } from './Menu'
+import { Menu, type MenuItem } from './Menu'
 
 interface Props {
   /** The session's own level; undefined uses Claude Code's default for the model. */
@@ -20,9 +20,8 @@ interface Props {
 export function EffortPicker({ value, model, models, onChange, prefix = 'Effort', disabled }: Props) {
   const [at, setAt] = useState<{ x: number; y: number } | null>(null)
   const offered = effortLevelsFor(model, models)
-  // A model without an effort setting has nothing to pick, unless a level is already set to clear.
-  if (!offered.length && !value) return null
-  const levels = EFFORT_LEVELS.filter(l => offered.includes(l.value) || l.value === value)
+  const items = effortMenuItems(value, model, models, onChange)
+  if (!items.length) return null
   const shown = effortLabel(value)
   const note = value && !offered.includes(value) ? ' This model doesn’t offer it, so Claude Code uses the nearest level.' : ''
 
@@ -54,17 +53,33 @@ export function EffortPicker({ value, model, models, onChange, prefix = 'Effort'
         <Menu
           at={at}
           onClose={() => setAt(null)}
-          items={[
-            { label: 'Default', hint: 'Claude Code’s default for the model.', checked: !value, onClick: () => onChange(undefined) },
-            ...levels.map(l => ({
-              label: l.label,
-              hint: l.hint,
-              checked: value === l.value,
-              onClick: () => onChange(l.value),
-            })),
-          ]}
+          items={items}
         />
       )}
     </>
   )
+}
+
+/**
+ * The menu choices for effort: Default plus the levels the model offers. Empty for a model without
+ * an effort setting, unless a level is already set and needs a way back to Default.
+ */
+export function effortMenuItems(
+  value: EffortLevel | undefined,
+  model: string | undefined,
+  models: readonly ModelChoice[],
+  onChange: (effort: EffortLevel | undefined) => void,
+): MenuItem[] {
+  const offered = effortLevelsFor(model, models)
+  if (!offered.length && !value) return []
+  const levels = EFFORT_LEVELS.filter(l => offered.includes(l.value) || l.value === value)
+  return [
+    { label: 'Default', hint: 'Claude Code’s default for the model.', checked: !value, onClick: () => onChange(undefined) },
+    ...levels.map(l => ({
+      label: l.label,
+      hint: l.hint,
+      checked: value === l.value,
+      onClick: () => onChange(l.value),
+    })),
+  ]
 }

@@ -1215,6 +1215,18 @@ code {
   max-width: 280px;
   white-space: normal;
 }
+.menu-section {
+  padding: 8px 10px 2px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.menu-section:not(:first-child) {
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+}
 .addon-chip {
   padding: 4px 10px;
   font-size: 12.5px;
@@ -1665,6 +1677,10 @@ textarea.text-input {
   flex-direction: column;
   max-height: calc(100vh - 16px);
   overflow-y: auto;
+}
+/* A menu taller than the screen scrolls; without this its items squeeze and overlap instead. */
+.menu > * {
+  flex-shrink: 0;
 }
 .menu button {
   text-align: left;
@@ -2131,8 +2147,8 @@ html.remote .project-head {
   .wide-only {
     display: none;
   }
-  /* The chat header has no room for an effort chip on the default; pick one on the Home view. */
-  .chat-tools .effort-chip:not(.on) {
+  /* No room for a second chip in the chat header; the model chip's menu holds effort instead. */
+  .chat-tools .effort-chip {
     display: none;
   }
 

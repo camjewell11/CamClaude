@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
+import type { EffortLevel } from '@shared/effort'
 import type { ModelChoice } from '@shared/models'
 import { groupToolRuns } from '@shared/toolGroups'
 import type { ChatItem, ImageAttachment, Project, SessionView, Settings } from '@shared/types'
@@ -62,6 +63,14 @@ export function ChatView({ session, project, settings, models, items, allSession
     }
   }
 
+  const runModel = session.activeModel || session.model || project.model
+  const pickEffort = (level: EffortLevel | undefined) => {
+    setError('')
+    cam()
+      .setEffort(session.id, level ?? '')
+      .catch(err => setError(errorText(err)))
+  }
+
   return (
     <div className="chat">
       <header className="chat-head drag">
@@ -88,18 +97,9 @@ export function ChatView({ session, project, settings, models, items, allSession
                 .setModel(session.id, m)
                 .catch(err => setError(errorText(err)))
             }}
+            effort={{ value: session.effort, model: runModel, onChange: pickEffort }}
           />
-          <EffortPicker
-            value={session.effort}
-            model={session.activeModel || session.model || project.model}
-            models={models}
-            onChange={level => {
-              setError('')
-              cam()
-                .setEffort(session.id, level ?? '')
-                .catch(err => setError(errorText(err)))
-            }}
-          />
+          <EffortPicker value={session.effort} model={runModel} models={models} onChange={pickEffort} />
           {session.addons && session.addons.length > 0 && (
             <span className="chip chip-static" title={`Add-ons: ${addonLabels(session.addons)}`}>
               {session.addons.length === 1 ? '1 add-on' : `${session.addons.length} add-ons`}
