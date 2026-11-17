@@ -8,6 +8,10 @@ export interface ModelChoice {
   resolvedModel?: string
   displayName: string
   description: string
+  /** False when the model has no effort setting; unset when Claude Code didn't say. */
+  supportsEffort?: boolean
+  /** The effort levels the model accepts, when Claude Code lists them. */
+  supportedEffortLevels?: string[]
 }
 
 /** Used until a session has started and Claude Code has listed its own models. */
@@ -58,13 +62,16 @@ export function cleanModelChoices(rows: unknown): ModelChoice[] {
   const out: ModelChoice[] = []
   for (const r of rows) {
     if (!r || typeof r !== 'object') continue
-    const { value, resolvedModel, displayName, description } = r as Record<string, unknown>
+    const { value, resolvedModel, displayName, description, supportsEffort, supportedEffortLevels } = r as Record<string, unknown>
     if (typeof value !== 'string' || !value.trim()) continue
+    const levels = Array.isArray(supportedEffortLevels) ? supportedEffortLevels.filter(l => typeof l === 'string') : []
     out.push({
       value,
       ...(typeof resolvedModel === 'string' && resolvedModel ? { resolvedModel } : {}),
       displayName: typeof displayName === 'string' && displayName ? displayName : value,
       description: typeof description === 'string' ? description : '',
+      ...(typeof supportsEffort === 'boolean' ? { supportsEffort } : {}),
+      ...(levels.length ? { supportedEffortLevels: levels } : {}),
     })
   }
   return out

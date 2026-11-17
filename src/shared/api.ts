@@ -34,10 +34,20 @@ export interface CamApi {
   /**
    * addons: ids from src/shared/addons.ts that this session (and its successors) load.
    * model: an alias or id for this session (and its successors); empty uses the project's model.
+   * effort: an effort level for this session (and its successors); empty uses Claude Code's default.
    */
-  createSession(projectId: string, prompt?: string, images?: ImageAttachment[], addons?: string[], model?: string): Promise<string>
+  createSession(
+    projectId: string,
+    prompt?: string,
+    images?: ImageAttachment[],
+    addons?: string[],
+    model?: string,
+    effort?: string,
+  ): Promise<string>
   /** Switches the session's model; '' goes back to the project's model. */
   setModel(sessionId: string, model: string): Promise<void>
+  /** Switches the session's effort level; '' goes back to Claude Code's default. */
+  setEffort(sessionId: string, effort: string): Promise<void>
   send(sessionId: string, text: string, images?: ImageAttachment[]): Promise<void>
   interrupt(sessionId: string): Promise<void>
   respond(sessionId: string, requestId: string, response: PendingResponse): Promise<void>
@@ -94,6 +104,7 @@ export const INVOKE_CHANNELS = [
   'folderInfo',
   'createSession',
   'setModel',
+  'setEffort',
   'send',
   'interrupt',
   'respond',

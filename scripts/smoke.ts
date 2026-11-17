@@ -2,7 +2,8 @@
 // small requests): one turn in a throwaway project (with a photo attached), a manual handoff, and a
 // check that the successor does not hand off again. The first session picks one add-on
 // (sql-specialist) and runs on Haiku, then switches to Sonnet before the handoff; the successor must
-// inherit both the add-on and Sonnet. Run: npm run smoke [-- <scratch dir>]
+// inherit both the add-on and Sonnet. Effort starts at low and switches to high with the model; the
+// successor must inherit high. Run: npm run smoke [-- <scratch dir>]
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -46,7 +47,7 @@ const RED_PNG = 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAFklEQVR4nGO4oKB
 const first = mgr.createSession(
   project.id,
   'Reply with exactly the word: pong. Also tell me which environment variable names you were told about, and the color of the attached image in one word. Finally, answer yes or no: is an agent type named sql-specialist:sql-specialist available to you?',
-  { addons: ['sql-specialist'], model: 'haiku' },
+  { addons: ['sql-specialist'], model: 'haiku', effort: 'low' },
   [{ mediaType: 'image/png', data: RED_PNG }],
 )
 
@@ -72,6 +73,8 @@ console.log(`--- idle after two quick prompts: ${settledAfterQuickPrompts} (seco
 
 // Switch the live process to another model; the handoff turn and the successor run on it.
 await mgr.setModel(first.id, 'sonnet')
+let effortSwitchError = ''
+await mgr.setEffort(first.id, 'high').catch((err: unknown) => { effortSwitchError = String(err) })
 seen.push('MANUAL handoffNow')
 mgr.handoffNow(first.id)
 
@@ -112,6 +115,8 @@ const handoffModel = firstRec.activeModel ?? ''
 const succModel = succRec?.activeModel ?? ''
 const modelOk = /haiku/i.test(firstModel) && /sonnet/i.test(handoffModel) && succRec?.model === 'sonnet' && /sonnet/i.test(succModel) && store.models.length > 0
 console.log(`--- model: first turn ${firstModel}, handoff turn ${handoffModel}, successor asked ${succRec?.model} and ran ${succModel}`)
+const effortOk = !effortSwitchError && store.session(first.id).effort === 'high' && succRec?.effort === 'high'
+console.log(`--- effort: switch error ${effortSwitchError || 'none'}, first ${store.session(first.id).effort}, successor ${succRec?.effort}`)
 const piledUp =!(firstRec.archived && firstRec.archivedReason === 'handoff' && firstRec.successorId) || visible !== 1
 console.log(`--- visible sessions after handoff: ${visible}, first archived: ${firstRec.archived} (${firstRec.archivedReason})`)
 const verdict = !settledAfterQuickPrompts
@@ -128,6 +133,8 @@ const verdict = !settledAfterQuickPrompts
           ? 'SMOKE FAIL: the add-on did not load or was not inherited'
           : !modelOk
             ? 'SMOKE FAIL: the model was not applied, switched, or inherited'
-            : 'SMOKE OK'
+            : !effortOk
+              ? 'SMOKE FAIL: the effort level was not switched or inherited'
+              : 'SMOKE OK'
 console.log(verdict)
 process.exit(verdict === 'SMOKE OK' ? 0 : 1)

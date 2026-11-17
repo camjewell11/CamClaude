@@ -1,9 +1,11 @@
 import { useState } from 'react'
 
+import type { EffortLevel } from '@shared/effort'
 import type { AppState } from '@shared/types'
 import { cam, errorText } from '../util'
 import { AddonsButton } from './AddonsDialog'
 import { Composer } from './Composer'
+import { EffortPicker } from './EffortPicker'
 import { PlusIcon } from './Icons'
 import { MenuButton } from './MenuButton'
 import { ModelPicker } from './ModelPicker'
@@ -25,6 +27,8 @@ export function HomeView({ state, projectId, onPickProject, onStarted, onNewProj
   const [addons, setAddons] = useState<string[]>([])
   // Also per session: '' follows the project's model.
   const [model, setModel] = useState('')
+  // Also per session: undefined uses Claude Code's default effort.
+  const [effort, setEffort] = useState<EffortLevel | undefined>(undefined)
   const project = state.projects.find(p => p.id === projectId) ?? state.projects[0]
   const top = (
     <div className="home-drag drag">
@@ -59,9 +63,10 @@ export function HomeView({ state, projectId, onPickProject, onStarted, onNewProj
           onSend={async (text, images) => {
             setError('')
             try {
-              const id = await cam().createSession(project.id, text, images, addons, model)
+              const id = await cam().createSession(project.id, text, images, addons, model, effort ?? '')
               setAddons([])
               setModel('')
+              setEffort(undefined)
               onStarted(id)
             } catch (err) {
               setError(errorText(err))
@@ -83,6 +88,7 @@ export function HomeView({ state, projectId, onPickProject, onStarted, onNewProj
                 ))}
               </select>
               <ModelPicker prefix="Model" value={model} projectModel={project.model} models={state.models ?? []} onChange={setModel} />
+              <EffortPicker value={effort} model={model || project.model} models={state.models ?? []} onChange={setEffort} />
               <AddonsButton value={addons} onChange={setAddons} />
             </div>
           }

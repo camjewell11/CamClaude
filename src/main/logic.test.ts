@@ -17,6 +17,7 @@ import { groupToolRuns, toolNameSummary } from '../shared/toolGroups.ts'
 import { ADDONS, ADDON_SOURCES, addonById, cleanAddonIds } from '../shared/addons.ts'
 import { pluginDirName, pluginManifest, sourceDirName } from './addons.ts'
 import { cleanModelChoices, modelLabel } from '../shared/models.ts'
+import { cleanEffort, effortLabel, effortLevelsFor } from '../shared/effort.ts'
 import { effectivePermissionMode, permissionModeChoices } from '../shared/permissions.ts'
 import {
   addEntry,
@@ -266,7 +267,7 @@ test('cleanModelChoices keeps well-formed rows only', () => {
       { value: 'haiku' },
     ]),
     [
-      { value: 'sonnet', resolvedModel: 'claude-sonnet-5-5', displayName: 'Sonnet', description: 'Fast' },
+      { value: 'sonnet', resolvedModel: 'claude-sonnet-5-5', displayName: 'Sonnet', description: 'Fast', supportsEffort: true },
       { value: 'haiku', displayName: 'haiku', description: '' },
     ],
   )
@@ -451,4 +452,31 @@ test('bypass permissions mode needs the Settings switch', () => {
   assert.ok(!values(false, 'auto').includes('bypassPermissions'))
   // A project that already uses bypass keeps the option, so its dialog doesn't change it silently.
   assert.ok(values(false, 'bypassPermissions').includes('bypassPermissions'))
+})
+
+test('effort levels follow what the model offers', () => {
+  const models = cleanModelChoices([
+    { value: 'default', resolvedModel: 'claude-opus-5-5', displayName: 'Default', description: '', supportsEffort: true, supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'] },
+    { value: 'sonnet', resolvedModel: 'claude-sonnet-5-5', displayName: 'Sonnet', description: '', supportsEffort: true, supportedEffortLevels: ['high', 'low', 'medium', 'bogus'] },
+    { value: 'haiku', displayName: 'Haiku', description: '', supportsEffort: false },
+  ])
+  // Kept in the picker's order, unknown levels dropped.
+  assert.deepEqual(effortLevelsFor('sonnet', models), ['low', 'medium', 'high'])
+  // The resolved id finds the same row as the alias.
+  assert.deepEqual(effortLevelsFor('claude-sonnet-5-5', models), ['low', 'medium', 'high'])
+  assert.deepEqual(effortLevelsFor('haiku', models), [])
+  // No model picked: Claude Code's default row.
+  assert.equal(effortLevelsFor('', models).length, 5)
+  // A model the list doesn't know offers every level.
+  assert.equal(effortLevelsFor('claude-unknown-1', models).length, 5)
+  assert.equal(effortLevelsFor('sonnet', []).length, 5)
+})
+
+test('cleanEffort keeps known levels only', () => {
+  assert.equal(cleanEffort('xhigh'), 'xhigh')
+  assert.equal(cleanEffort(''), undefined)
+  assert.equal(cleanEffort('turbo'), undefined)
+  assert.equal(cleanEffort(3), undefined)
+  assert.equal(effortLabel(undefined), 'Default')
+  assert.equal(effortLabel('xhigh'), 'Extra high')
 })

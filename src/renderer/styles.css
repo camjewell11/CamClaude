@@ -1189,6 +1189,9 @@ code {
   flex-shrink: 0;
   cursor: pointer;
 }
+.narrow-only {
+  display: none;
+}
 .menu button.choice {
   position: relative;
   padding-left: 26px;
@@ -2120,6 +2123,16 @@ html.remote .project-head {
     max-width: none;
   }
   .chip-prefix {
+    display: none;
+  }
+  .narrow-only {
+    display: inline;
+  }
+  .wide-only {
+    display: none;
+  }
+  /* The chat header has no room for an effort chip on the default; pick one on the Home view. */
+  .chat-tools .effort-chip:not(.on) {
     display: none;
   }
 

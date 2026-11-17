@@ -11,6 +11,7 @@ import { ArchiveIcon, FolderIcon, HandoffIcon, MoreIcon } from './Icons'
 import { Menu } from './Menu'
 import { MenuButton } from './MenuButton'
 import { Message, ToolGroup } from './Messages'
+import { EffortPicker } from './EffortPicker'
 import { ModelPicker } from './ModelPicker'
 import { PendingCard } from './PendingCard'
 import { StatusDot } from './Sidebar'
@@ -85,6 +86,17 @@ export function ChatView({ session, project, settings, models, items, allSession
               setError('')
               cam()
                 .setModel(session.id, m)
+                .catch(err => setError(errorText(err)))
+            }}
+          />
+          <EffortPicker
+            value={session.effort}
+            model={session.activeModel || session.model || project.model}
+            models={models}
+            onChange={level => {
+              setError('')
+              cam()
+                .setEffort(session.id, level ?? '')
                 .catch(err => setError(errorText(err)))
             }}
           />

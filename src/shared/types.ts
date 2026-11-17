@@ -1,5 +1,6 @@
 // Types shared by the main process (which drives Claude Code) and the renderer (the UI).
 
+import type { EffortLevel } from './effort.ts'
 import type { ModelChoice } from './models.ts'
 
 export type PermissionModeSetting = 'default' | 'acceptEdits' | 'auto' | 'plan' | 'bypassPermissions'
@@ -57,6 +58,8 @@ export interface SessionRecord {
   model?: string
   /** The model id Claude Code last reported for this session's replies. */
   activeModel?: string
+  /** Effort level picked for this session; unset uses Claude Code's default. Successors inherit it. */
+  effort?: EffortLevel
   /** Text waiting in the composer, e.g. a handoff when auto-continue is off. */
   draft?: string
   error?: string

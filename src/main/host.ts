@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { randomUUID } from 'node:crypto'
 
 import type { CamApi, FolderInfo, InvokeChannel } from '../shared/api.ts'
+import { cleanEffort } from '../shared/effort.ts'
 import type { AppState, NewProjectInput, PendingResponse, Project, Settings } from '../shared/types.ts'
 import { AddonStore } from './addons.ts'
 import { parseConnectLink, saveClientLink } from './clientLink.ts'
@@ -301,14 +302,19 @@ const handlers: Handlers = {
   },
   knownFolders: () => sessions.knownFolders(),
   folderInfo: async path => folderInfo(path),
-  createSession: async (projectId, prompt, images, addons, model) =>
+  createSession: async (projectId, prompt, images, addons, model, effort) =>
     sessions.createSession(
       projectId,
       prompt,
-      { addons: Array.isArray(addons) ? addons : [], model: typeof model === 'string' ? model : undefined },
+      {
+        addons: Array.isArray(addons) ? addons : [],
+        model: typeof model === 'string' ? model : undefined,
+        effort: cleanEffort(effort),
+      },
       images ?? [],
     ).id,
   setModel: (id, model) => sessions.setModel(id, typeof model === 'string' ? model : ''),
+  setEffort: (id, effort) => sessions.setEffort(id, cleanEffort(effort)),
   send: (id, text, images) => sessions.send(id, text, images ?? []),
   interrupt: id => sessions.interrupt(id),
   respond: async (id, requestId, response: PendingResponse) => sessions.respond(id, requestId, response),

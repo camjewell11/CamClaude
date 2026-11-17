@@ -60,6 +60,7 @@ import type { AddonStore } from './addons.ts'
 import { addonById, cleanAddonIds } from '../shared/addons.ts'
 import { cleanModelChoices, type ModelChoice } from '../shared/models.ts'
 import { effectivePermissionMode } from '../shared/permissions.ts'
+import { cleanEffort, type EffortLevel } from '../shared/effort.ts'
 
 const CLIENT_APP = 'camclaude/0.1.0'
 
@@ -257,7 +258,7 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
   createSession(
     projectId: string,
     prompt?: string,
-    extra: Partial<Pick<SessionRecord, 'title' | 'predecessorId' | 'generation' | 'draft' | 'addons' | 'model'>> = {},
+    extra: Partial<Pick<SessionRecord, 'title' | 'predecessorId' | 'generation' | 'draft' | 'addons' | 'model' | 'effort'>> = {},
     images: readonly ImageAttachment[] = [],
   ): SessionRecord {
     userContent(prompt ?? '', images) // reject a bad image before the session exists
@@ -266,6 +267,7 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
     const now = Date.now()
     const addons = cleanAddonIds(extra.addons)
     const model = typeof extra.model === 'string' ? extra.model.trim() : ''
+    const effort = cleanEffort(extra.effort)
     const rec: SessionRecord = {
       id: randomUUID(),
       projectId,
@@ -283,6 +285,7 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
       draft: extra.draft,
       ...(addons.length ? { addons } : {}),
       ...(model ? { model } : {}),
+      ...(effort ? { effort } : {}),
     }
     this.store.addSession(rec)
     this.chats.set(rec.id, new ChatLog())
@@ -382,6 +385,19 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
     // The resolved id, when the list knows it, so the header changes before the next reply.
     const row = effective ? this.store.models.find(m => m.value === effective) : undefined
     this.patch(id, { model: chosen || undefined, activeModel: row?.resolvedModel ?? effective })
+  }
+
+  /**
+   * Picks the session's effort level; undefined goes back to Claude Code's default. A running
+   * process switches from its next request on; otherwise the level applies when the session starts.
+   */
+  async setEffort(id: string, effort: EffortLevel | undefined): Promise<void> {
+    const rec = this.store.session(id)
+    if (!rec) throw new Error('Unknown session')
+    const live = this.live.get(id)
+    // null clears the session's level, so Claude Code falls back to the model's default.
+    if (live) await live.q.applyFlagSettings({ effortLevel: effort ?? null })
+    this.patch(id, { effort })
   }
 
   models(): ModelChoice[] {
@@ -504,6 +520,7 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
       permissionMode: mode,
       allowDangerouslySkipPermissions: mode === 'bypassPermissions',
       model: rec.model || project.model || undefined,
+      ...(rec.effort ? { effort: rec.effort } : {}),
       // Only the add-ons this session opted in to; the user's own plugins load from settings as usual.
       ...(plugins.length ? { plugins: plugins.map(path => ({ type: 'local' as const, path })) } : {}),
       pathToClaudeCodeExecutable: claudeBinary(this.store.settings.claudeExecutable),
@@ -826,6 +843,7 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
       generation: rec.generation + 1,
       addons: rec.addons,
       model: rec.model,
+      effort: rec.effort,
       draft: auto ? undefined : prompt,
     })
     this.notice(id, `Handed off to “${successor.title}”. This session is archived.`)
