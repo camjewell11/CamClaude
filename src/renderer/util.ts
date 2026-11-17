@@ -1,9 +1,11 @@
-import type { CamApi } from '@shared/api'
+import type { CamApi, CamClientBridge } from '@shared/api'
 import type { SessionStatus, SessionView, Settings, UsageTotals } from '@shared/types'
 
 declare global {
   interface Window {
     cam: CamApi
+    /** Set only in the CamClaude app on another PC that shows this one (client mode). */
+    camClient?: CamClientBridge
   }
 }
 

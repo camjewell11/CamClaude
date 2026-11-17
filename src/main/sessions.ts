@@ -59,6 +59,7 @@ import type { Store } from './store.ts'
 import type { AddonStore } from './addons.ts'
 import { addonById, cleanAddonIds } from '../shared/addons.ts'
 import { cleanModelChoices, type ModelChoice } from '../shared/models.ts'
+import { effectivePermissionMode } from '../shared/permissions.ts'
 
 const CLIENT_APP = 'camclaude/0.1.0'
 
@@ -469,6 +470,10 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
     const env = await loadEnvFiles(project.folder, project.envFiles)
     if (env.missing.length) this.notice(id, `Couldn't read ${env.missing.join(', ')}; continuing without it.`, 'warn')
     const plugins = await this.addonPlugins(id, rec.addons ?? [])
+    const mode = effectivePermissionMode(project.permissionMode, this.store.settings.allowBypassPermissions)
+    if (mode !== project.permissionMode) {
+      this.notice(id, 'Bypass permissions mode is off in Settings, so this session asks before edits and commands.', 'warn')
+    }
 
     const live: Live = {
       q: undefined as unknown as Query,
@@ -496,8 +501,8 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
       // Loads ~/.claude settings, the project's .claude/settings*.json, and CLAUDE.md files.
       settingSources: ['user', 'project', 'local'],
       systemPrompt: { type: 'preset', preset: 'claude_code', append: systemAppend(project, Object.keys(env.vars)) },
-      permissionMode: project.permissionMode,
-      allowDangerouslySkipPermissions: project.permissionMode === 'bypassPermissions',
+      permissionMode: mode,
+      allowDangerouslySkipPermissions: mode === 'bypassPermissions',
       model: rec.model || project.model || undefined,
       // Only the add-ons this session opted in to; the user's own plugins load from settings as usual.
       ...(plugins.length ? { plugins: plugins.map(path => ({ type: 'local' as const, path })) } : {}),

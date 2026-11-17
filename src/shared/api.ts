@@ -52,6 +52,11 @@ export interface CamApi {
   updateSettings(patch: Partial<Settings>): Promise<Settings>
   remoteInfo(): Promise<RemoteInfo>
   regenerateRemoteToken(): Promise<RemoteInfo>
+  /**
+   * Desktop only: checks another PC's connect link, saves it, and restarts this install as a
+   * window onto that PC. Its own sessions stop running here.
+   */
+  connectToPc(link: string): Promise<void>
 
   onState(cb: (s: AppState) => void): () => void
   onChat(cb: (u: ChatUpdate) => void): () => void
@@ -66,7 +71,15 @@ export interface CamApi {
 }
 
 /** Calls that only make sense at the PC; a remote client can't make them. */
-export const DESKTOP_ONLY: readonly (keyof CamApi)[] = ['pickFolder', 'openFolder']
+export const DESKTOP_ONLY: readonly (keyof CamApi)[] = ['pickFolder', 'openFolder', 'connectToPc']
+
+/** What the preload gives a window that shows another PC's CamClaude (client mode). */
+export interface CamClientBridge {
+  /** Forget the other PC and restart as a full CamClaude on this PC. */
+  disconnect(): Promise<void>
+  /** Try to load the other PC's CamClaude again. */
+  retry(): Promise<void>
+}
 
 /** Invoke channels, named after the CamApi methods they serve. */
 export const INVOKE_CHANNELS = [
@@ -94,6 +107,7 @@ export const INVOKE_CHANNELS = [
   'updateSettings',
   'remoteInfo',
   'regenerateRemoteToken',
+  'connectToPc',
 ] as const satisfies readonly (keyof CamApi)[]
 
 export type InvokeChannel = (typeof INVOKE_CHANNELS)[number]

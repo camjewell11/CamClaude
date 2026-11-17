@@ -202,7 +202,11 @@ export function App() {
         />
       )}
       {dialog?.kind === 'project' && state.projects.some(p => p.id === dialog.id) && (
-        <ProjectDialog project={state.projects.find(p => p.id === dialog.id)!} onClose={() => setDialog(null)} />
+        <ProjectDialog
+          project={state.projects.find(p => p.id === dialog.id)!}
+          allowBypass={state.settings.allowBypassPermissions}
+          onClose={() => setDialog(null)}
+        />
       )}
       {dialog?.kind === 'settings' && <SettingsDialog settings={state.settings} onClose={() => setDialog(null)} />}
     </div>

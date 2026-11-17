@@ -1,11 +1,20 @@
 import { useState } from 'react'
 
+import { permissionModeChoices } from '@shared/permissions'
 import type { PermissionModeSetting, Project } from '@shared/types'
 import { cam, errorText } from '../util'
-import { Field, Modal, PERMISSION_MODES, splitList } from './Modal'
+import { Field, Modal, splitList } from './Modal'
 
 /** Edits a project's name, secrets, guidance, permissions and model. */
-export function ProjectDialog({ project, onClose }: { project: Project; onClose: () => void }) {
+export function ProjectDialog({
+  project,
+  allowBypass,
+  onClose,
+}: {
+  project: Project
+  allowBypass: boolean
+  onClose: () => void
+}) {
   const [name, setName] = useState(project.name)
   const [envFiles, setEnvFiles] = useState(project.envFiles.join(', '))
   const [guidance, setGuidance] = useState(project.guidance)
@@ -84,7 +93,7 @@ export function ProjectDialog({ project, onClose }: { project: Project; onClose:
       <div className="row two">
         <Field label="Permissions">
           <select className="text-input" value={permissionMode} onChange={e => setPermissionMode(e.target.value as PermissionModeSetting)}>
-            {PERMISSION_MODES.map(m => (
+            {permissionModeChoices(allowBypass, project.permissionMode).map(m => (
               <option key={m.value} value={m.value}>
                 {m.label}
               </option>

@@ -57,6 +57,23 @@ socket checks the cookie and the page's origin. Anyone with the link can run com
 through Claude, so treat it like a password. The connection is plain HTTP; Tailscale encrypts it
 on the way, but on "Any network" without Tailscale, it travels unencrypted over your Wi-Fi.
 
+## Use it from another PC
+
+A second PC can run CamClaude as a window onto the first one, in its own desktop window. Sessions,
+projects, and files stay on the first PC.
+
+1. On the first PC, turn on remote access as above and copy a link with **Copy**.
+2. Install Tailscale on the second PC and sign in to the same account.
+3. Install CamClaude on the second PC. Open Settings → **Connect to another PC**, paste the link,
+   and select **Connect**. CamClaude checks the link and restarts as a window onto the first PC.
+
+The window loads the UI from the first PC, so updating CamClaude there updates what the second PC
+shows. If the first PC can't be reached, the window says so and tries again every 10 seconds.
+**Disconnect and use this PC** (in Settings, or on that page) restarts the second PC as a full
+CamClaude with its own projects again. The link is saved in `%APPDATA%\camclaude\client.json` on
+the second PC. Folder pickers and **Open folder** aren't available there, and notifications don't
+appear on the second PC.
+
 ## How it works
 
 CamClaude is an Electron app. Its main process drives Claude Code through the
@@ -68,6 +85,9 @@ script is needed.
 
 | Path | What it does |
 | --- | --- |
+| `src/main/index.ts` | Entry point: loads `host.ts`, or `client.ts` when `client.json` exists |
+| `src/main/host.ts` | The full app: window, tray, API handlers, remote server |
+| `src/main/client.ts` | Client mode: a window onto another PC's CamClaude |
 | `src/main/sessions.ts` | Session lifecycle, status, permission prompts, guards, handoff, cleanup |
 | `src/main/guard.ts` | Size and loop guards and the handoff prompts (ported from quota-guard) |
 | `src/main/chatlog.ts` | Turns SDK and transcript messages into chat items |

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import type { FolderInfo } from '@shared/api'
+import { permissionModeChoices } from '@shared/permissions'
 import type { KnownFolder, PermissionModeSetting, Project, Settings } from '@shared/types'
 import { ago, cam, errorText } from '../util'
-import { Field, Modal, PERMISSION_MODES, splitList } from './Modal'
+import { Field, Modal, splitList } from './Modal'
 
 interface Props {
   settings: Settings
@@ -213,7 +214,7 @@ export function NewProjectDialog({ settings, projects, onClose, onCreated }: Pro
       <div className="row two">
         <Field label="Permissions">
           <select className="text-input" value={permissionMode} onChange={e => setPermissionMode(e.target.value as PermissionModeSetting)}>
-            {PERMISSION_MODES.map(m => (
+            {permissionModeChoices(settings.allowBypassPermissions).map(m => (
               <option key={m.value} value={m.value}>
                 {m.label}
               </option>

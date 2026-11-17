@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 
-import type { PermissionModeSetting } from '@shared/types'
 import { useSheetDismiss } from '../touch'
 
 export function Modal({ title, onClose, children, footer, wide }: {
@@ -39,14 +38,6 @@ export function Field({ label, hint, children }: { label: string; hint?: React.R
     </label>
   )
 }
-
-export const PERMISSION_MODES: { value: PermissionModeSetting; label: string }[] = [
-  { value: 'default', label: 'Ask before edits and commands' },
-  { value: 'acceptEdits', label: 'Accept file edits, ask for commands' },
-  { value: 'auto', label: 'Auto (Claude Code classifier decides)' },
-  { value: 'plan', label: 'Plan only (no changes)' },
-  { value: 'bypassPermissions', label: 'Never ask (bypass permissions)' },
-]
 
 export const splitList = (s: string) =>
   s

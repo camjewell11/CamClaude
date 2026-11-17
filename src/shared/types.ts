@@ -83,6 +83,8 @@ export interface Settings {
   projectsRoot: string
   /** Claude Code executable to run; empty uses the one bundled with the Agent SDK. */
   claudeExecutable: string
+  /** Projects may use bypass permissions mode. Off: they start in default mode instead. */
+  allowBypassPermissions: boolean
   /** Serve the UI to other devices (phone) over the network. */
   remoteEnabled: boolean
   remotePort: number
@@ -245,6 +247,7 @@ export const DEFAULT_SETTINGS: Settings = {
   notify: true,
   projectsRoot: '',
   claudeExecutable: '',
+  allowBypassPermissions: false,
   remoteEnabled: false,
   remotePort: 8765,
   remoteScope: 'tailscale',

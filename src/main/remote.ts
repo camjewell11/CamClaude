@@ -55,7 +55,7 @@ export function tailscaleAddresses(): string[] {
   return out
 }
 
-function lanAddresses(): string[] {
+export function lanAddresses(): string[] {
   const out: string[] = []
   for (const list of Object.values(networkInterfaces())) {
     for (const a of list ?? []) {

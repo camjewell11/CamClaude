@@ -1947,6 +1947,10 @@ html.remote {
   text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
 }
+/* The CamClaude app on another PC draws the native window buttons over the page, as at the PC. */
+html.remote.client {
+  --overlay-gap: 150px;
+}
 html.remote .app {
   height: 100dvh;
   padding-top: env(safe-area-inset-top);

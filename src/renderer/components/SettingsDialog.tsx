@@ -16,7 +16,26 @@ function RemoteSection({ settings }: { settings: Settings }) {
   useEffect(refresh, [refresh, settings.remoteEnabled, settings.remoteScope, settings.remotePort, settings.remoteToken])
 
   if (cam().isRemote) {
-    return <p className="field-hint">You're connected from another device. Manage remote access on the PC.</p>
+    const client = window.camClient
+    if (!client) return <p className="field-hint">You're connected from another device. Manage remote access on the PC.</p>
+    return (
+      <div className="remote">
+        <p className="field-hint">
+          This window shows CamClaude on {location.host}. Sessions run on that PC, with its files and its Claude Code. Manage
+          remote access there.
+        </p>
+        <button
+          className="btn self-start"
+          onClick={() => {
+            if (confirm('Disconnect and use CamClaude on this PC instead? You can connect again from Settings.')) {
+              void client.disconnect()
+            }
+          }}
+        >
+          Disconnect and use this PC
+        </button>
+      </div>
+    )
   }
 
   const apply = async (patch: Partial<Settings>) => {
@@ -135,6 +154,49 @@ function RemoteSection({ settings }: { settings: Settings }) {
   )
 }
 
+/** Turns this install into a window onto another PC's CamClaude. */
+function ConnectSection() {
+  const [link, setLink] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  const connect = async () => {
+    setBusy(true)
+    setError('')
+    try {
+      await cam().connectToPc(link)
+      // CamClaude restarts as a window onto the other PC.
+    } catch (err) {
+      setError(errorText(err))
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="remote">
+      <p className="field-hint">
+        Use CamClaude on another PC from here, with that PC's projects, sessions, and files. On the other PC, turn on remote
+        access and copy its link. Both PCs need Tailscale. CamClaude restarts. This PC's own projects and sessions are kept for when
+        you disconnect.
+      </p>
+      <div className="row">
+        <input
+          className="text-input grow"
+          placeholder="http://100.x.x.x:8765/?t=…"
+          value={link}
+          disabled={busy}
+          onChange={e => setLink(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && link.trim() && void connect()}
+        />
+        <button className="btn" disabled={busy || !link.trim()} onClick={() => void connect()}>
+          {busy ? 'Connecting…' : 'Connect'}
+        </button>
+      </div>
+      {error && <div className="error-line">{error}</div>}
+    </div>
+  )
+}
+
 const K = 1000
 
 /** Handoff thresholds, cleanup timing, and notifications. */
@@ -211,11 +273,30 @@ export function SettingsDialog({ settings, onClose }: { settings: Settings; onCl
       <h3>Remote access</h3>
       <RemoteSection settings={settings} />
 
+      {!cam().isRemote && (
+        <>
+          <h3>Connect to another PC</h3>
+          <ConnectSection />
+        </>
+      )}
+
       <h3>General</h3>
       <label className="toggle">
         <input type="checkbox" checked={s.notify} onChange={e => setS({ ...s, notify: e.target.checked })} />
         Notify me when a session needs input or finishes while CamClaude is in the background
       </label>
+      <label className="toggle">
+        <input
+          type="checkbox"
+          checked={s.allowBypassPermissions}
+          onChange={e => setS({ ...s, allowBypassPermissions: e.target.checked })}
+        />
+        Allow bypass permissions mode
+      </label>
+      <p className="field-hint">
+        Lets a project pick “Never ask (bypass permissions)”, which runs every tool without asking. While this is off, those
+        projects ask before edits and commands. Applies to sessions started after saving.
+      </p>
       <Field label="New project folders go in">
         <input className="text-input" value={s.projectsRoot} onChange={e => setS({ ...s, projectsRoot: e.target.value })} />
       </Field>

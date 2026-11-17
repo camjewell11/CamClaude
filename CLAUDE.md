@@ -20,9 +20,14 @@ See README.md for features and layout.
   crash. `npm run dev`, `npm start` and `npm run icons` clear it (scripts/run.mjs); clear it
   yourself before running `npx electron .` or `dist\win-unpacked\CamClaude.exe` from such a terminal.
 - Every UI call goes through `CamApi` (src/shared/api.ts): IPC in the desktop window, a WebSocket
-  for phones (src/renderer/remoteApi.ts → src/main/remote.ts → `dispatch` in index.ts). A new call
+  for phones (src/renderer/remoteApi.ts → src/main/remote.ts → `dispatch` in host.ts). A new call
   needs its name in `INVOKE_CHANNELS`, and `DESKTOP_ONLY` if it only makes sense at the PC.
-  Events reach both through `send()` in index.ts, never `win.webContents.send` directly.
+  Events reach both through `send()` in host.ts, never `win.webContents.send` directly.
+- `src/main/index.ts` only picks a mode: `host.ts` (the full app) or `client.ts` (client mode, when
+  `client.json` exists in userData). Both are separate Rollup entries in `electron.vite.config.ts`
+  so they build next to `index.js`; their `../renderer` and `../preload` paths depend on that.
+  Client mode loads the other PC's served UI, so a renderer change reaches client windows only
+  after the host PC runs the new build. `html.client` marks that window (native window buttons).
 - The phone server serves the built renderer (`out/renderer`), so in `npm run dev` it shows the
   last `npm run build`, not the live dev server.
 - Write test JSON for the store without a BOM (PowerShell 5.1's `Set-Content -Encoding utf8` adds
@@ -30,7 +35,8 @@ See README.md for features and layout.
 - `npm run icons` regenerates build/icon.png and src/renderer/public/icon.png from icon.svg.
 - `CAMCLAUDE_DATA_DIR=<dir>` runs the app against a separate data folder. Use it for testing, never
   the real `%APPDATA%\camclaude`. `CAMCLAUDE_SCREENSHOT=<png>` (with optional
-  `CAMCLAUDE_SCREENSHOT_JS`, `CAMCLAUDE_SCREENSHOT_WAIT_MS`, and
+  `CAMCLAUDE_SCREENSHOT_JS`, `CAMCLAUDE_SCREENSHOT_WAIT_MS`, `CAMCLAUDE_SCREENSHOT_DELAY_MS` (wait
+  after load; raise it for client mode, which needs the WebSocket first), and
   `CAMCLAUDE_SCREENSHOT_SIZE=390x844` for the phone layout) captures the window and quits.
 - The main process is ESM, because the SDK is ESM-only; the preload must stay CommonJS (`index.cjs`),
   because the renderer is sandboxed.

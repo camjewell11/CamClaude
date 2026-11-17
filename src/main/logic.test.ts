@@ -17,6 +17,7 @@ import { groupToolRuns, toolNameSummary } from '../shared/toolGroups.ts'
 import { ADDONS, ADDON_SOURCES, addonById, cleanAddonIds } from '../shared/addons.ts'
 import { pluginDirName, pluginManifest, sourceDirName } from './addons.ts'
 import { cleanModelChoices, modelLabel } from '../shared/models.ts'
+import { effectivePermissionMode, permissionModeChoices } from '../shared/permissions.ts'
 import {
   addEntry,
   completeLines,
@@ -29,6 +30,7 @@ import {
   UsageLedger,
   weekStartDay,
 } from './usage.ts'
+import { clearClientLink, parseConnectLink, readClientLink, saveClientLink } from './clientLink.ts'
 
 test('parseEnv handles comments, export, quotes and multi-line values', () => {
   const env = parseEnv(
@@ -402,4 +404,51 @@ test('UsageLedger reads only new lines, finds subagents, and survives a restart'
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
+})
+
+test('parseConnectLink keeps only the origin and token of a connect link', () => {
+  assert.deepEqual(parseConnectLink('  http://100.106.231.41:8765/?t=abc_DEF-123  '), {
+    link: 'http://100.106.231.41:8765/?t=abc_DEF-123',
+    host: '100.106.231.41:8765',
+  })
+  assert.deepEqual(parseConnectLink('http://pc:8765/index.html?x=1&t=a%2Bb'), { link: 'http://pc:8765/?t=a%2Bb', host: 'pc:8765' })
+  assert.ok('error' in parseConnectLink('100.106.231.41:8765/?t=abc'))
+  assert.ok('error' in parseConnectLink('ftp://pc/?t=abc'))
+  assert.ok('error' in parseConnectLink('http://pc:8765/'))
+})
+
+test('client.json round-trips, and a bad file means the full app', async () => {
+  const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const dir = mkdtempSync(join(tmpdir(), 'camclaude-client-'))
+  try {
+    assert.equal(readClientLink(dir), null)
+    saveClientLink(dir, 'http://pc:8765/?t=tok')
+    assert.equal(readClientLink(dir), 'http://pc:8765/?t=tok')
+    writeFileSync(join(dir, 'client.json'), '﻿{"link":"http://pc:8765/?t=tok"}')
+    assert.equal(readClientLink(dir), 'http://pc:8765/?t=tok')
+    writeFileSync(join(dir, 'client.json'), '{"link":"http://pc:8765/"}')
+    assert.equal(readClientLink(dir), null)
+    writeFileSync(join(dir, 'client.json'), 'not json')
+    assert.equal(readClientLink(dir), null)
+    clearClientLink(dir)
+    clearClientLink(dir) // already gone: no error
+    assert.equal(readClientLink(dir), null)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('bypass permissions mode needs the Settings switch', () => {
+  assert.equal(effectivePermissionMode('bypassPermissions', false), 'default')
+  assert.equal(effectivePermissionMode('bypassPermissions', true), 'bypassPermissions')
+  assert.equal(effectivePermissionMode('auto', false), 'auto')
+  const values = (allow: boolean, current?: Parameters<typeof permissionModeChoices>[1]) =>
+    permissionModeChoices(allow, current).map(m => m.value)
+  assert.ok(values(true).includes('bypassPermissions'))
+  assert.ok(!values(false).includes('bypassPermissions'))
+  assert.ok(!values(false, 'auto').includes('bypassPermissions'))
+  // A project that already uses bypass keeps the option, so its dialog doesn't change it silently.
+  assert.ok(values(false, 'bypassPermissions').includes('bypassPermissions'))
 })
