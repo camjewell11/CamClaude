@@ -282,7 +282,10 @@ const handlers: Handlers = {
   getChat: id => sessions.getChat(id),
   createProject,
   updateProject: async (id, patch) => {
-    store.updateProject(id, patch)
+    const before = store.project(id)?.effort
+    const { effort, ...rest } = patch
+    store.updateProject(id, 'effort' in patch ? { ...rest, effort: cleanEffort(effort) } : rest)
+    if (store.project(id)?.effort !== before) await sessions.projectEffortChanged(id)
     send('state', state())
   },
   removeProject: async id => {

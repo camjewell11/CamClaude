@@ -17,6 +17,10 @@ export const isEffortLevel = (x: unknown): x is EffortLevel => EFFORT_LEVELS.som
 /** A stored or sent effort value, or undefined (Claude Code's default) when it isn't a known level. */
 export const cleanEffort = (x: unknown): EffortLevel | undefined => (isEffortLevel(x) ? x : undefined)
 
+/** The level a session runs at: its own, else its project's; undefined is Claude Code's default. */
+export const sessionEffort = (session: { effort?: EffortLevel }, project: { effort?: EffortLevel }): EffortLevel | undefined =>
+  session.effort ?? project.effort
+
 export const effortLabel = (level: EffortLevel | undefined): string =>
   EFFORT_LEVELS.find(l => l.value === level)?.label ?? 'Default'
 

@@ -17,6 +17,8 @@ export interface Project {
   permissionMode: PermissionModeSetting
   /** Model override; empty uses Claude Code's default. */
   model: string
+  /** Effort for sessions that don't pick their own; unset uses Claude Code's default. */
+  effort?: EffortLevel
   createdAt: number
   collapsed: boolean
 }

@@ -1,11 +1,12 @@
 import { useState } from 'react'
 
+import { EFFORT_LEVELS, cleanEffort, type EffortLevel } from '@shared/effort'
 import { permissionModeChoices } from '@shared/permissions'
 import type { PermissionModeSetting, Project } from '@shared/types'
 import { cam, errorText } from '../util'
 import { Field, Modal, splitList } from './Modal'
 
-/** Edits a project's name, secrets, guidance, permissions and model. */
+/** Edits a project's name, secrets, guidance, permissions, model, and effort. */
 export function ProjectDialog({
   project,
   allowBypass,
@@ -20,6 +21,7 @@ export function ProjectDialog({
   const [guidance, setGuidance] = useState(project.guidance)
   const [permissionMode, setPermissionMode] = useState<PermissionModeSetting>(project.permissionMode)
   const [model, setModel] = useState(project.model)
+  const [effort, setEffort] = useState<EffortLevel | undefined>(project.effort)
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [error, setError] = useState('')
 
@@ -31,6 +33,7 @@ export function ProjectDialog({
         guidance,
         permissionMode,
         model: model.trim(),
+        effort: effort ?? '',
       })
       onClose()
     } catch (err) {
@@ -104,6 +107,16 @@ export function ProjectDialog({
           <input className="text-input" value={model} onChange={e => setModel(e.target.value)} placeholder="default" />
         </Field>
       </div>
+      <Field label="Effort" hint="For sessions that don't pick their own. Running sessions switch from their next request.">
+        <select className="text-input" value={effort ?? ''} onChange={e => setEffort(cleanEffort(e.target.value))}>
+          <option value="">Claude Code default</option>
+          {EFFORT_LEVELS.map(l => (
+            <option key={l.value} value={l.value}>
+              {l.label}
+            </option>
+          ))}
+        </select>
+      </Field>
     </Modal>
   )
 }

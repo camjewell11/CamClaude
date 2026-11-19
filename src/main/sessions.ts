@@ -60,7 +60,7 @@ import type { AddonStore } from './addons.ts'
 import { addonById, cleanAddonIds } from '../shared/addons.ts'
 import { cleanModelChoices, type ModelChoice } from '../shared/models.ts'
 import { effectivePermissionMode } from '../shared/permissions.ts'
-import { cleanEffort, type EffortLevel } from '../shared/effort.ts'
+import { cleanEffort, sessionEffort, type EffortLevel } from '../shared/effort.ts'
 
 const CLIENT_APP = 'camclaude/0.1.0'
 
@@ -388,16 +388,36 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
   }
 
   /**
-   * Picks the session's effort level; undefined goes back to Claude Code's default. A running
-   * process switches from its next request on; otherwise the level applies when the session starts.
+   * Picks the session's effort level; undefined goes back to the project's level, or Claude Code's
+   * default when the project has none. A running process switches from its next request on;
+   * otherwise the level applies when the session starts.
    */
   async setEffort(id: string, effort: EffortLevel | undefined): Promise<void> {
     const rec = this.store.session(id)
-    if (!rec) throw new Error('Unknown session')
+    const project = rec && this.store.project(rec.projectId)
+    if (!rec || !project) throw new Error('Unknown session')
     const live = this.live.get(id)
-    // null clears the session's level, so Claude Code falls back to the model's default.
-    if (live) await live.q.applyFlagSettings({ effortLevel: effort ?? null })
+    // null clears the level, so Claude Code falls back to the model's default.
+    if (live) await live.q.applyFlagSettings({ effortLevel: sessionEffort({ effort }, project) ?? null })
     this.patch(id, { effort })
+  }
+
+  /**
+   * After a project's effort changes: running sessions that follow the project switch from their
+   * next request on. Sessions with their own level keep it.
+   */
+  async projectEffortChanged(projectId: string): Promise<void> {
+    const project = this.store.project(projectId)
+    if (!project) return
+    for (const [id, live] of this.live) {
+      const rec = this.store.session(id)
+      if (!rec || rec.projectId !== projectId || rec.effort) continue
+      try {
+        await live.q.applyFlagSettings({ effortLevel: project.effort ?? null })
+      } catch (err) {
+        this.log(`[${id.slice(0, 8)}] project effort switch failed: ${String(err)}`)
+      }
+    }
   }
 
   models(): ModelChoice[] {
@@ -520,7 +540,7 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
       permissionMode: mode,
       allowDangerouslySkipPermissions: mode === 'bypassPermissions',
       model: rec.model || project.model || undefined,
-      ...(rec.effort ? { effort: rec.effort } : {}),
+      ...(sessionEffort(rec, project) ? { effort: sessionEffort(rec, project) } : {}),
       // Only the add-ons this session opted in to; the user's own plugins load from settings as usual.
       ...(plugins.length ? { plugins: plugins.map(path => ({ type: 'local' as const, path })) } : {}),
       pathToClaudeCodeExecutable: claudeBinary(this.store.settings.claudeExecutable),

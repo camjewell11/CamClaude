@@ -97,9 +97,15 @@ export function ChatView({ session, project, settings, models, items, allSession
                 .setModel(session.id, m)
                 .catch(err => setError(errorText(err)))
             }}
-            effort={{ value: session.effort, model: runModel, onChange: pickEffort }}
+            effort={{ value: session.effort, projectEffort: project.effort, model: runModel, onChange: pickEffort }}
           />
-          <EffortPicker value={session.effort} model={runModel} models={models} onChange={pickEffort} />
+          <EffortPicker
+            value={session.effort}
+            projectEffort={project.effort}
+            model={runModel}
+            models={models}
+            onChange={pickEffort}
+          />
           {session.addons && session.addons.length > 0 && (
             <span className="chip chip-static" title={`Add-ons: ${addonLabels(session.addons)}`}>
               {session.addons.length === 1 ? '1 add-on' : `${session.addons.length} add-ons`}

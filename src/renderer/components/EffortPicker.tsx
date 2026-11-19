@@ -5,8 +5,10 @@ import type { ModelChoice } from '@shared/models'
 import { Menu, type MenuItem } from './Menu'
 
 interface Props {
-  /** The session's own level; undefined uses Claude Code's default for the model. */
+  /** The session's own level; undefined follows the project. */
   value: EffortLevel | undefined
+  /** The project's level; undefined uses Claude Code's default for the model. */
+  projectEffort?: EffortLevel
   /** The model the session runs or will run (alias or id), to list the levels it accepts. */
   model?: string
   models: readonly ModelChoice[]
@@ -17,13 +19,19 @@ interface Props {
 }
 
 /** A chip that shows the effort level and opens a menu to pick another. */
-export function EffortPicker({ value, model, models, onChange, prefix = 'Effort', disabled }: Props) {
+export function EffortPicker({ value, projectEffort, model, models, onChange, prefix = 'Effort', disabled }: Props) {
   const [at, setAt] = useState<{ x: number; y: number } | null>(null)
   const offered = effortLevelsFor(model, models)
-  const items = effortMenuItems(value, model, models, onChange)
+  const items = effortMenuItems(value, model, models, onChange, projectEffort)
   if (!items.length) return null
-  const shown = effortLabel(value)
-  const note = value && !offered.includes(value) ? ' This model doesn’t offer it, so Claude Code uses the nearest level.' : ''
+  const running = value ?? projectEffort
+  const shown = effortLabel(running)
+  const note = running && !offered.includes(running) ? ' This model doesn’t offer it, so Claude Code uses the nearest level.' : ''
+  const asked = value
+    ? `Effort picked for this session: ${shown}.`
+    : projectEffort
+      ? `Follows the project: ${shown}.`
+      : 'Uses Claude Code’s default effort for the model.'
 
   return (
     <>
@@ -31,7 +39,7 @@ export function EffortPicker({ value, model, models, onChange, prefix = 'Effort'
         type="button"
         className={`chip model-chip effort-chip ${value ? 'on' : ''}`}
         disabled={disabled}
-        title={`${value ? `Effort picked for this session: ${shown}.` : 'Uses Claude Code’s default effort for the model.'}${note} Click to change.`}
+        title={`${asked}${note} Click to change.`}
         aria-label={`Effort: ${shown}. Change effort`}
         onClick={e => {
           const r = e.currentTarget.getBoundingClientRect()
@@ -39,7 +47,7 @@ export function EffortPicker({ value, model, models, onChange, prefix = 'Effort'
         }}
       >
         {prefix && <span className="chip-prefix">{prefix} ·</span>}
-        {value ? (
+        {running ? (
           shown
         ) : (
           // Phones hide the prefix, and "Default" alone doesn't say what it's for.
@@ -61,20 +69,25 @@ export function EffortPicker({ value, model, models, onChange, prefix = 'Effort'
 }
 
 /**
- * The menu choices for effort: Default plus the levels the model offers. Empty for a model without
- * an effort setting, unless a level is already set and needs a way back to Default.
+ * The menu choices for effort: Default (the project's level, else Claude Code's) plus the levels the
+ * model offers. Empty for a model without an effort setting, unless a level is already set and
+ * needs a way back to Default.
  */
 export function effortMenuItems(
   value: EffortLevel | undefined,
   model: string | undefined,
   models: readonly ModelChoice[],
   onChange: (effort: EffortLevel | undefined) => void,
+  projectEffort?: EffortLevel,
 ): MenuItem[] {
   const offered = effortLevelsFor(model, models)
   if (!offered.length && !value) return []
   const levels = EFFORT_LEVELS.filter(l => offered.includes(l.value) || l.value === value)
+  const fallback = projectEffort
+    ? { label: `Project default (${effortLabel(projectEffort)})`, hint: 'Set in the project’s settings.' }
+    : { label: 'Default', hint: 'Claude Code’s default for the model.' }
   return [
-    { label: 'Default', hint: 'Claude Code’s default for the model.', checked: !value, onClick: () => onChange(undefined) },
+    { ...fallback, checked: !value, onClick: () => onChange(undefined) },
     ...levels.map(l => ({
       label: l.label,
       hint: l.hint,

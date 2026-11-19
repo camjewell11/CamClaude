@@ -12,6 +12,7 @@ import type {
   RemoteInfo,
   Settings,
 } from './types.ts'
+import type { EffortLevel } from './effort.ts'
 
 export interface FolderInfo {
   exists: boolean
@@ -24,7 +25,8 @@ export interface CamApi {
   getChat(sessionId: string): Promise<ChatItem[]>
 
   createProject(input: NewProjectInput): Promise<Project>
-  updateProject(id: string, patch: Partial<Project>): Promise<void>
+  /** effort: '' goes back to Claude Code's default (undefined would vanish over the WebSocket). */
+  updateProject(id: string, patch: Partial<Omit<Project, 'effort'>> & { effort?: EffortLevel | '' }): Promise<void>
   removeProject(id: string): Promise<void>
   pickFolder(defaultPath?: string): Promise<string | null>
   openFolder(path: string): Promise<void>

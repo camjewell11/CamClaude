@@ -17,7 +17,7 @@ import { groupToolRuns, toolNameSummary } from '../shared/toolGroups.ts'
 import { ADDONS, ADDON_SOURCES, addonById, cleanAddonIds } from '../shared/addons.ts'
 import { pluginDirName, pluginManifest, sourceDirName } from './addons.ts'
 import { cleanModelChoices, modelLabel } from '../shared/models.ts'
-import { cleanEffort, effortLabel, effortLevelsFor } from '../shared/effort.ts'
+import { cleanEffort, effortLabel, effortLevelsFor, sessionEffort } from '../shared/effort.ts'
 import { effectivePermissionMode, permissionModeChoices } from '../shared/permissions.ts'
 import {
   addEntry,
@@ -479,4 +479,10 @@ test('cleanEffort keeps known levels only', () => {
   assert.equal(cleanEffort(3), undefined)
   assert.equal(effortLabel(undefined), 'Default')
   assert.equal(effortLabel('xhigh'), 'Extra high')
+})
+
+test('a session without its own effort follows the project', () => {
+  assert.equal(sessionEffort({}, { effort: 'medium' }), 'medium')
+  assert.equal(sessionEffort({ effort: 'high' }, { effort: 'medium' }), 'high')
+  assert.equal(sessionEffort({}, {}), undefined)
 })

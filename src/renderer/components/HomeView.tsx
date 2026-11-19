@@ -27,7 +27,7 @@ export function HomeView({ state, projectId, onPickProject, onStarted, onNewProj
   const [addons, setAddons] = useState<string[]>([])
   // Also per session: '' follows the project's model.
   const [model, setModel] = useState('')
-  // Also per session: undefined uses Claude Code's default effort.
+  // Also per session: undefined follows the project's effort.
   const [effort, setEffort] = useState<EffortLevel | undefined>(undefined)
   const project = state.projects.find(p => p.id === projectId) ?? state.projects[0]
   const top = (
@@ -88,7 +88,7 @@ export function HomeView({ state, projectId, onPickProject, onStarted, onNewProj
                 ))}
               </select>
               <ModelPicker prefix="Model" value={model} projectModel={project.model} models={state.models ?? []} onChange={setModel} />
-              <EffortPicker value={effort} model={model || project.model} models={state.models ?? []} onChange={setEffort} />
+              <EffortPicker value={effort} projectEffort={project.effort} model={model || project.model} models={state.models ?? []} onChange={setEffort} />
               <AddonsButton value={addons} onChange={setAddons} />
             </div>
           }

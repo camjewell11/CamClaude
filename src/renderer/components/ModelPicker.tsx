@@ -21,7 +21,12 @@ interface Props {
    * On a phone, the effort choices join this menu (the chat header has no room for a second chip,
    * so CSS hides the EffortPicker there). `model` is the model the session runs or will run.
    */
-  effort?: { value: EffortLevel | undefined; model?: string; onChange: (effort: EffortLevel | undefined) => void }
+  effort?: {
+    value: EffortLevel | undefined
+    projectEffort?: EffortLevel
+    model?: string
+    onChange: (effort: EffortLevel | undefined) => void
+  }
 }
 
 /** Matches the phone layout in styles.css. */
@@ -56,7 +61,9 @@ export function ModelPicker({ value, projectModel, activeModel, models, onChange
       >
         {prefix && <span className="chip-prefix">{prefix} ·</span>}
         {shown}
-        {effort?.value && <span className="narrow-only"> · {effortLabel(effort.value)}</span>}
+        {(effort?.value ?? effort?.projectEffort) && (
+          <span className="narrow-only"> · {effortLabel(effort?.value ?? effort?.projectEffort)}</span>
+        )}
       </button>
       {at && (
         <Menu
@@ -64,7 +71,7 @@ export function ModelPicker({ value, projectModel, activeModel, models, onChange
           onClose={() => setAt(null)}
           items={[
             // Effort first: its few choices stay in view above the long model list.
-            ...(at.withEffort && effort ? withSection(effortMenuItems(effort.value, effort.model, models, effort.onChange), 'Effort') : []),
+            ...(at.withEffort && effort ? withSection(effortMenuItems(effort.value, effort.model, models, effort.onChange, effort.projectEffort), 'Effort') : []),
             {
               label: `Project default (${projectLabel})`,
               checked: !value,
