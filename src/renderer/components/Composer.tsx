@@ -79,15 +79,22 @@ export function Composer({ onSend, onStop, busy, disabled, placeholder, initial,
   const canSend = (!!text.trim() || images.length > 0) && preparing === 0 && !disabled
   const suggested = !disabled && !text && images.length === 0 ? suggestion : undefined
 
+  /** Puts the suggestion in the box to edit. Focus happens inside the tap or key press, so iOS opens its keyboard once. */
   const acceptSuggestion = () => {
     if (!suggested) return
     setText(suggested)
-    requestAnimationFrame(() => {
-      const el = ref.current
-      if (!el) return
-      el.focus({ preventScroll: true })
-      el.setSelectionRange(suggested.length, suggested.length)
-    })
+    ref.current?.focus({ preventScroll: true })
+    requestAnimationFrame(() => ref.current?.setSelectionRange(suggested.length, suggested.length))
+  }
+
+  /** On touch screens a tap on the chip sends the suggestion as is, without the keyboard. */
+  const sendSuggestion = async () => {
+    if (!suggested) return
+    for (const img of images) URL.revokeObjectURL(img.url)
+    setText('')
+    setImages([])
+    setImageError('')
+    await onSend(suggested, [])
   }
 
   const submit = async () => {
@@ -134,10 +141,20 @@ export function Composer({ onSend, onStop, busy, disabled, placeholder, initial,
       )}
       {imageError && <div className="error-line inline">{imageError}</div>}
       {suggested && touch && (
-        <button className="suggestion-chip" onClick={acceptSuggestion} aria-label={`Use suggestion: ${suggested}`}>
-          <span className="suggestion-label">Suggested</span>
-          {suggested}
-        </button>
+        <div className="suggestion-row">
+          <button
+            className="suggestion-chip"
+            onMouseDown={e => e.preventDefault()}
+            onClick={() => void sendSuggestion()}
+            aria-label={`Send suggestion: ${suggested}`}
+          >
+            <span className="suggestion-label">Suggested · tap to send</span>
+            {suggested}
+          </button>
+          <button className="suggestion-edit" onClick={acceptSuggestion} aria-label="Edit suggestion before sending">
+            Edit
+          </button>
+        </div>
       )}
       <textarea
         ref={ref}
