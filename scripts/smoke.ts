@@ -32,10 +32,12 @@ store.addProject(project)
 const logs: string[] = []
 const mgr = new SessionManager(store, join(data, 'handoffs'), (l: string) => logs.push(l), new AddonStore(join(data, 'addons'), (l: string) => logs.push(l)))
 const seen: string[] = []
+const suggestions: string[] = []
 mgr.on('state', () => {
   for (const s of mgr.views()) {
     const line = `${s.id.slice(0, 8)} gen${s.generation} ${s.status}${s.archived ? ' archived:' + s.archivedReason : ''} tok=${s.lastRequestTokens} pending=${s.pending.length}`
     if (seen.at(-1) !== line) seen.push(line)
+    if (s.suggestion && !suggestions.includes(s.suggestion)) suggestions.push(s.suggestion)
     // Deny any permission prompt so the test can't hang.
     for (const p of s.pending) mgr.respond(s.id, p.requestId, p.kind === 'question' ? { kind: 'cancel' } : { kind: 'permission', decision: 'deny', message: 'smoke test' })
   }
@@ -105,6 +107,8 @@ const firstChat = await mgr.getChat(first.id)
 const sawImage = firstChat.some((i: { kind: string; images?: string[] }) => i.kind === 'user' && i.images?.length === 1) &&
   firstChat.some((i: { kind: string; text?: string }) => i.kind === 'assistant' && /red/i.test(i.text ?? ''))
 console.log(`--- image attached and described as red: ${sawImage}`)
+// Informational: Claude Code skips suggestions on a first turn and might return none.
+console.log(`--- prompt suggestions seen: ${suggestions.length ? suggestions.map(x => JSON.stringify(x)).join(', ') : 'none'}`)
 const succRec = store.sessions.find((x: { generation: number }) => x.generation === 2)
 const addonWarnings = [...firstChat, ...(succRec ? await mgr.getChat(succRec.id) : [])]
   .filter((i: { kind: string; text?: string }) => i.kind === 'notice' && /add-on|didn't load/i.test(i.text ?? '') && !/Downloading/.test(i.text ?? ''))

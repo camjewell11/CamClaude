@@ -196,6 +196,7 @@ export function ChatView({ session, project, settings, models, items, allSession
             initial={session.draft}
             autoFocus
             busy={busy}
+            suggestion={!busy && !successor ? session.suggestion : undefined}
             onSend={send}
             onStop={() => void cam().interrupt(session.id)}
             placeholder={successor ? 'This session was handed off. Messages here continue the old session.' : undefined}

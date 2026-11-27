@@ -177,6 +177,8 @@ export type PendingResponse =
 export interface SessionView extends SessionRecord {
   isLive: boolean
   pending: PendingRequest[]
+  /** Claude Code's guess at the next prompt, after a turn; cleared when anything is sent. */
+  suggestion?: string
 }
 
 /** Tokens and their API list-price cost; not what a subscription bills. */

@@ -15,6 +15,8 @@ interface Props {
   initial?: string
   autoFocus?: boolean
   footer?: React.ReactNode
+  /** A predicted next prompt: ghost text that Tab accepts, or a chip to tap on touch screens. */
+  suggestion?: string
 }
 
 /**
@@ -22,7 +24,7 @@ interface Props {
  * send button sends, and the box doesn't take focus by itself (that would open the keyboard).
  * Photos come from the image button, a paste, or a drop.
  */
-export function Composer({ onSend, onStop, busy, disabled, placeholder, initial, autoFocus, footer }: Props) {
+export function Composer({ onSend, onStop, busy, disabled, placeholder, initial, autoFocus, footer, suggestion }: Props) {
   const [text, setText] = useState(initial ?? '')
   const ref = useRef<HTMLTextAreaElement>(null)
   const [touch] = useState(isTouch)
@@ -75,6 +77,18 @@ export function Composer({ onSend, onStop, busy, disabled, placeholder, initial,
   }
 
   const canSend = (!!text.trim() || images.length > 0) && preparing === 0 && !disabled
+  const suggested = !disabled && !text && images.length === 0 ? suggestion : undefined
+
+  const acceptSuggestion = () => {
+    if (!suggested) return
+    setText(suggested)
+    requestAnimationFrame(() => {
+      const el = ref.current
+      if (!el) return
+      el.focus({ preventScroll: true })
+      el.setSelectionRange(suggested.length, suggested.length)
+    })
+  }
 
   const submit = async () => {
     if (!canSend) return
@@ -119,11 +133,17 @@ export function Composer({ onSend, onStop, busy, disabled, placeholder, initial,
         </div>
       )}
       {imageError && <div className="error-line inline">{imageError}</div>}
+      {suggested && touch && (
+        <button className="suggestion-chip" onClick={acceptSuggestion} aria-label={`Use suggestion: ${suggested}`}>
+          <span className="suggestion-label">Suggested</span>
+          {suggested}
+        </button>
+      )}
       <textarea
         ref={ref}
         rows={1}
         value={text}
-        placeholder={placeholder ?? 'Reply to Claude…'}
+        placeholder={suggested && !touch ? suggested : (placeholder ?? 'Reply to Claude…')}
         disabled={disabled}
         enterKeyHint={touch ? 'enter' : 'send'}
         onChange={e => setText(e.target.value)}
@@ -134,6 +154,11 @@ export function Composer({ onSend, onStop, busy, disabled, placeholder, initial,
           void addFiles(files)
         }}
         onKeyDown={e => {
+          if (e.key === 'Tab' && !e.shiftKey && suggested && !touch) {
+            e.preventDefault()
+            acceptSuggestion()
+            return
+          }
           if (e.key === 'Enter' && !e.shiftKey && !touch && !e.nativeEvent.isComposing) {
             e.preventDefault()
             void submit()
@@ -163,7 +188,10 @@ export function Composer({ onSend, onStop, busy, disabled, placeholder, initial,
         >
           <ImageIcon size={18} />
         </button>
-        <div className="composer-footer">{footer}</div>
+        <div className="composer-footer">
+          {footer}
+          {suggested && !touch && <span className="suggestion-hint"><kbd>Tab</kbd> to use the suggestion</span>}
+        </div>
         {busy && onStop && (
           <button className="round-button stop" onClick={onStop} title="Stop (Esc)" aria-label="Stop">
             <StopIcon size={14} />

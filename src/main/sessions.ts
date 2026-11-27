@@ -115,6 +115,10 @@ interface Live {
   idleTimer?: ReturnType<typeof setTimeout>
   /** Handoff requests sent since the last completed handoff. */
   handoffAttempts: number
+  /** The latest prompt_suggestion, shown in the composer until the next prompt. */
+  suggestion?: string
+  /** When the last result arrived; a suggestion counts only if no prompt was sent after it. */
+  lastResultAt: number
 }
 
 /** How long 'idle' must hold before prompts without a result count as finished. */
@@ -164,7 +168,12 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
   views(): SessionView[] {
     return this.store.sessions.map(s => {
       const live = this.live.get(s.id)
-      return { ...s, isLive: !!live, pending: live ? [...live.pending.values()].map(p => p.req) : [] }
+      return {
+        ...s,
+        isLive: !!live,
+        pending: live ? [...live.pending.values()].map(p => p.req) : [],
+        ...(live?.suggestion ? { suggestion: live.suggestion } : {}),
+      }
     })
   }
 
@@ -312,6 +321,7 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
     const live = await this.ensureLive(id)
     if (!live) return
     live.loops.reset()
+    live.suggestion = undefined
     live.turnsQueued += 1
     live.lastPushAt = Date.now()
     this.setStatus(id, live.phase === 'writing-handoff' ? 'handing-off' : 'running')
@@ -521,6 +531,7 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
       lastAssistantText: '',
       lastPushAt: 0,
       handoffAttempts: 0,
+      lastResultAt: 0,
     }
 
     const options: Options = {
@@ -541,6 +552,8 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
       allowDangerouslySkipPermissions: mode === 'bypassPermissions',
       model: rec.model || project.model || undefined,
       ...(sessionEffort(rec, project) ? { effort: sessionEffort(rec, project) } : {}),
+      // A predicted next prompt after each turn (prompt_suggestion); reuses the turn's prompt cache.
+      promptSuggestions: true,
       // Only the add-ons this session opted in to; the user's own plugins load from settings as usual.
       ...(plugins.length ? { plugins: plugins.map(path => ({ type: 'local' as const, path })) } : {}),
       pathToClaudeCodeExecutable: claudeBinary(this.store.settings.claudeExecutable),
@@ -640,7 +653,17 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
         return
       }
       case 'result': {
+        live.lastResultAt = Date.now()
         await this.onTurnEnd(id, live, msg)
+        return
+      }
+      case 'prompt_suggestion': {
+        // Not during a handoff, and not when a prompt was sent after the turn it follows.
+        const text = msg.suggestion?.trim()
+        if (text && live.phase === 'normal' && live.lastPushAt <= live.lastResultAt) {
+          live.suggestion = text
+          this.changed()
+        }
         return
       }
       default:
@@ -816,6 +839,7 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
     live.lastAssistantText = ''
     live.turnsQueued += 1
     live.handoffAttempts += 1
+    live.suggestion = undefined
     live.lastPushAt = Date.now()
     this.setStatus(id, 'handing-off')
     const isOver = isOverLimit(rec.lastRequestTokens, rec.baselineTokens ?? 0, this.store.settings.handoffTokens)

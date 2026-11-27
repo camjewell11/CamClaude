@@ -32,6 +32,10 @@ running several sessions across projects without watching them all the time.
   only the levels the model offers. A running session changes from its next request, and handoff
   successors keep the level. On phones, the chat header's model chip menu
   lists the effort levels too.
+- **Suggested next prompt.** After a turn, Claude Code might suggest what you'd type next. On a
+  computer it shows as faint text in the empty message box; press **Tab** to use it. On a phone it
+  shows as a **Suggested** chip above the box; tap it to put it in the box, then edit or send it.
+  Turn suggestions off with `"promptSuggestionEnabled": false` in `~/.claude/settings.json`.
 - **Usage guards from quota-guard.** The app refuses a tool call that keeps returning the same
   result (the loop guard), and the sidebar shows your plan's 5-hour and weekly usage.
 - **Token use per project.** Each project in the sidebar shows its all-time cost. Select the usage
