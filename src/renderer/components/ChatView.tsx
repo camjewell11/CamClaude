@@ -77,11 +77,13 @@ export function ChatView({ session, project, settings, models, items, allSession
         <div className="chat-title no-drag">
           <MenuButton onClick={onMenu} waiting={waiting} />
           <StatusDot value={ind} />
-          <span className="title-text" title={session.title}>
-            {session.title}
-          </span>
-          <span className="title-project" title={project.folder}>
-            {project.name}
+          <span className="title-stack">
+            <span className="title-text" title={session.title}>
+              {session.title}
+            </span>
+            <span className="title-project" title={project.folder}>
+              {project.name}
+            </span>
           </span>
         </div>
         <div className="chat-tools no-drag">
